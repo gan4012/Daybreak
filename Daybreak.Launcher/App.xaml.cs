@@ -31,12 +31,16 @@ public partial class App : Application
     protected override void OnStartup(StartupEventArgs e)
     {
         LogSetup.Initialize();
-        ApplicationThemeManager.Apply(ApplicationTheme.Dark);
+
+        var config = Core.Storage.LauncherConfig.Load();
+        Services.ThemeService.ApplyThemeMode(config.ThemeMode, config.Backdrop);
 
         AppHost.Start();
         base.OnStartup(e);
 
         MainWindow = GetService<MainWindow>();
+        if (config.ThemeMode == "System")
+            Wpf.Ui.Appearance.SystemThemeWatcher.Watch(MainWindow);
         MainWindow.Show();
     }
 

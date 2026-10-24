@@ -11,8 +11,11 @@ public class LauncherConfig
     /// <summary>界面语言</summary>
     public string Language { get; set; } = "zh-CN";
 
-    /// <summary>主题:Dark / Light</summary>
-    public string Theme { get; set; } = "Dark";
+    /// <summary>主题模式:Dark / Light / System</summary>
+    public string ThemeMode { get; set; } = "Dark";
+
+    /// <summary>背景效果:Acrylic / Mica / None</summary>
+    public string Backdrop { get; set; } = "Acrylic";
 
     /// <summary>游戏根目录,null 表示默认 %APPDATA%/.minecraft</summary>
     public string? GameDirectory { get; set; }
@@ -26,10 +29,14 @@ public class LauncherConfig
     /// <summary>下载镜像:official / bmclapi</summary>
     public string Mirror { get; set; } = "official";
 
+    /// <summary>测试用存储目录重定向;生产环境必须保持为 null。</summary>
+    internal static string? DirectoryOverrideForTests;
+
     [System.Text.Json.Serialization.JsonIgnore]
-    public static string DefaultDirectory => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-        "Daybreak");
+    public static string DefaultDirectory => DirectoryOverrideForTests
+        ?? Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            "Daybreak");
 
     public static string GetFilePath() => Path.Combine(DefaultDirectory, "config.json");
 

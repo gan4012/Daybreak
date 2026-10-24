@@ -9,19 +9,61 @@
             <TextBlock Text="设置" FontSize="26" FontWeight="SemiBold" />
 
             <Border Style="{StaticResource GlassCard}" Margin="0,16,0,0">
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
-                    <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                        <TextBlock Text="深色主题" FontSize="15" FontWeight="SemiBold" />
-                        <TextBlock Text="切换启动器的亮 / 暗外观,设置会自动保存。" Opacity="0.7" Margin="0,2,0,0" />
+                <StackPanel>
+                    <TextBlock Text="外观" FontSize="15" FontWeight="SemiBold" />
+                    <TextBlock
+                        Text="主题模式与背景效果即时生效,设置会自动保存。"
+                        Opacity="0.7"
+                        Margin="0,2,0,0" />
+
+                    <TextBlock Text="主题模式" FontSize="13" Opacity="0.85" Margin="0,16,0,8" />
+                    <StackPanel Orientation="Horizontal">
+                        <RadioButton
+                            x:Name="ThemeLightRadio"
+                            GroupName="ThemeMode"
+                            Tag="Light"
+                            Content="浅色"
+                            Margin="0,0,10,0"
+                            Checked="ThemeMode_Checked" />
+                        <RadioButton
+                            x:Name="ThemeDarkRadio"
+                            GroupName="ThemeMode"
+                            Tag="Dark"
+                            Content="深色"
+                            Margin="0,0,10,0"
+                            Checked="ThemeMode_Checked" />
+                        <RadioButton
+                            x:Name="ThemeSystemRadio"
+                            GroupName="ThemeMode"
+                            Tag="System"
+                            Content="跟随系统"
+                            Checked="ThemeMode_Checked" />
                     </StackPanel>
-                    <ui:ToggleSwitch
-                        Grid.Column="1"
-                        IsChecked="{Binding IsDarkTheme, Mode=TwoWay}" />
-                </Grid>
+
+                    <TextBlock Text="背景效果" FontSize="13" Opacity="0.85" Margin="0,16,0,8" />
+                    <StackPanel Orientation="Horizontal">
+                        <RadioButton
+                            x:Name="BackdropAcrylicRadio"
+                            GroupName="Backdrop"
+                            Tag="Acrylic"
+                            Content="亚克力(液态玻璃)"
+                            Margin="0,0,10,0"
+                            Checked="Backdrop_Checked" />
+                        <RadioButton
+                            x:Name="BackdropMicaRadio"
+                            GroupName="Backdrop"
+                            Tag="Mica"
+                            Content="云母"
+                            Margin="0,0,10,0"
+                            Checked="Backdrop_Checked" />
+                        <RadioButton
+                            x:Name="BackdropNoneRadio"
+                            GroupName="Backdrop"
+                            Tag="None"
+                            Content="不透明"
+                            Checked="Backdrop_Checked" />
+                    </StackPanel>
+                </StackPanel>
             </Border>
 
             <Border Style="{StaticResource GlassCard}" Margin="0,12,0,0">

@@ -1,29 +1,52 @@
+using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using Daybreak.Core.Storage;
+using Daybreak.Launcher.Services;
 using Serilog;
-using Wpf.Ui.Appearance;
 
 namespace Daybreak.Launcher.ViewModels;
 
 public partial class SettingsViewModel : ObservableObject
 {
-    [ObservableProperty]
-    private bool _isDarkTheme;
+    public LauncherConfig Config { get; } = LauncherConfig.Load();
 
     [ObservableProperty]
-    private LauncherConfig _config = LauncherConfig.Load();
+    private string _selectedThemeMode;
 
-    partial void OnIsDarkThemeChanged(bool value)
-    {
-        var theme = value ? ApplicationTheme.Dark : ApplicationTheme.Light;
-        ApplicationThemeManager.Apply(theme);
-        Config.Theme = value ? "Dark" : "Light";
-        Config.Save();
-        Log.Information("主题切换为 {Theme}", Config.Theme);
-    }
+    [ObservableProperty]
+    private string _selectedBackdrop;
 
     public SettingsViewModel()
     {
-        _isDarkTheme = Config.Theme != "Light";
+        _selectedThemeMode = Config.ThemeMode;
+        _selectedBackdrop = Config.Backdrop;
+    }
+
+    [RelayCommand]
+    private void SetThemeMode(string mode)
+    {
+        if (string.IsNullOrEmpty(mode))
+            return;
+
+        SelectedThemeMode = mode;
+        Config.ThemeMode = mode;
+        ThemeService.ApplyThemeMode(mode, Config.Backdrop);
+        Config.Save();
+        Log.Information("主题模式切换为 {ThemeMode}", mode);
+    }
+
+    [RelayCommand]
+    private void SetBackdrop(string backdrop)
+    {
+        if (string.IsNullOrEmpty(backdrop))
+            return;
+
+        SelectedBackdrop = backdrop;
+        Config.Backdrop = backdrop;
+        if (Application.Current?.MainWindow is Window window)
+            ThemeService.ApplyBackdrop(window, backdrop);
+        Config.Save();
+        Log.Information("背景效果切换为 {Backdrop}", backdrop);
     }
 }
