@@ -116,28 +116,19 @@
             </Setter.Value>
         </Setter>
     </Style>
-    <!-- ===== 侧边栏导航项:暖色玻璃药丸 + 悬浮感 =====
-         资源键名来自 WPF-UI 4.3 程序集,覆盖后所有导航项生效 -->
-    <SolidColorBrush x:Key="NavigationViewItemBackground" Color="#0DFFFFFF" />
-    <SolidColorBrush x:Key="NavigationViewItemBackgroundPointerOver" Color="#26FFFFFF" />
-    <SolidColorBrush x:Key="NavigationViewItemBackgroundPressed" Color="#40FFFFFF" />
+    <!-- ===== 侧边栏导航项 =====
+         平时完全透明,悬停微亮,选中出现暖色玻璃药丸;不加边框和投影,避免"一摞卡片"感 -->
+    <SolidColorBrush x:Key="NavigationViewItemBackground" Color="#00FFFFFF" />
+    <SolidColorBrush x:Key="NavigationViewItemBackgroundPointerOver" Color="#1FFFFFFF" />
+    <SolidColorBrush x:Key="NavigationViewItemBackgroundPressed" Color="#2EFFFFFF" />
     <LinearGradientBrush x:Key="NavigationViewItemBackgroundSelected" StartPoint="0,0" EndPoint="0,1">
-        <GradientStop Color="#52FFC64D" Offset="0" />
-        <GradientStop Color="#2EFF8A3D" Offset="1" />
+        <GradientStop Color="#47FFC64D" Offset="0" />
+        <GradientStop Color="#29FF8A3D" Offset="1" />
     </LinearGradientBrush>
     <LinearGradientBrush x:Key="NavigationViewItemBackgroundSelectedLeftFluent" StartPoint="0,0" EndPoint="0,1">
-        <GradientStop Color="#52FFC64D" Offset="0" />
-        <GradientStop Color="#2EFF8A3D" Offset="1" />
+        <GradientStop Color="#47FFC64D" Offset="0" />
+        <GradientStop Color="#29FF8A3D" Offset="1" />
     </LinearGradientBrush>
-    <SolidColorBrush x:Key="NavigationViewItemBorderBrush" Color="#24FFFFFF" />
+    <SolidColorBrush x:Key="NavigationViewItemBorderBrush" Color="#00FFFFFF" />
     <SolidColorBrush x:Key="NavigationViewSelectionIndicatorForeground" Color="{StaticResource BrandAccentColor}" />
-
-    <!-- 导航项悬浮投影(基于控件库默认样式扩展) -->
-    <Style TargetType="{x:Type ui:NavigationViewItem}" BasedOn="{StaticResource {x:Type ui:NavigationViewItem}}">
-        <Setter Property="Effect">
-            <Setter.Value>
-                <DropShadowEffect BlurRadius="16" ShadowDepth="3" Direction="270" Opacity="0.3" Color="#000000" />
-            </Setter.Value>
-        </Setter>
-    </Style>
 </ResourceDictionary>
