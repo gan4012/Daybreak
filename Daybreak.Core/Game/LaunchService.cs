@@ -41,6 +41,15 @@ public record LaunchRequest(
     public string? AuthServerUrl { get; init; }
 }
 
+/// <summary>加载器类型。</summary>
+public static class ModLoader
+{
+    public const string Vanilla = "vanilla";
+    public const string Fabric = "fabric";
+    public const string Forge = "forge";
+    public const string NeoForge = "neoforge";
+}
+
 /// <summary>
 /// 启动核心门面:封装 CmlLib.Core 的版本列表 / 安装 / 启动,镜像切换经 HttpClient 改写实现。
 /// </summary>
@@ -48,11 +57,13 @@ public class LaunchService
 {
     private readonly string? _gameDirectory;
     private readonly string _mirror;
+    private readonly bool _versionIsolation;
 
-    public LaunchService(string? gameDirectory, string mirror)
+    public LaunchService(string? gameDirectory, string mirror, bool versionIsolation = false)
     {
         _gameDirectory = string.IsNullOrWhiteSpace(gameDirectory) ? null : gameDirectory;
         _mirror = DownloadMirror.IsValid(mirror) ? mirror : DownloadMirror.Official;
+        _versionIsolation = versionIsolation;
     }
 
     /// <summary>游戏根目录:用户配置优先,否则系统默认 %APPDATA%/.minecraft。</summary>
@@ -60,12 +71,42 @@ public class LaunchService
         _gameDirectory ?? Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), ".minecraft");
 
-    private MinecraftLauncher CreateLauncher()
+    /// <summary>构建带镜像/重试处理的启动器(供本服务与 LoaderService 共用)。</summary>
+    public static MinecraftLauncher CreateLauncher(string? gameDirectory, string mirror)
     {
-        var http = new HttpClient(new MirrorHttpHandler(_mirror));
-        var gamePath = new MinecraftPath(ResolveGameDirectory());
-        var parameters = MinecraftLauncherParameters.CreateDefault(gamePath, http);
+        var http = new HttpClient(new ResilientHttpHandler(mirror));
+        var resolved = string.IsNullOrWhiteSpace(gameDirectory)
+            ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), ".minecraft")
+            : gameDirectory;
+        var parameters = MinecraftLauncherParameters.CreateDefault(new MinecraftPath(resolved), http);
         return new MinecraftLauncher(parameters);
+    }
+
+    private MinecraftLauncher CreateLauncher() => CreateLauncher(_gameDirectory, _mirror);
+
+    /// <summary>默认共享游戏目录的 MinecraftPath。</summary>
+    public MinecraftPath CreateGamePath() =>
+        new MinecraftPath(ResolveGameDirectory());
+
+    /// <summary>
+    /// 解析某版本的 MinecraftPath。开启版本隔离时:游戏运行目录(saves/config 等)在版本文件夹内,
+    /// 而 versions/libraries/assets/runtime 仍指向共享位置,避免重复下载。
+    /// </summary>
+    private MinecraftPath ResolvePathForVersion(string versionId)
+    {
+        var shared = CreateGamePath();
+        if (!_versionIsolation)
+            return shared;
+
+        var isolatedBase = Path.Combine(shared.BasePath, "versions", versionId);
+        var isolated = new MinecraftPath(isolatedBase)
+        {
+            Versions = shared.Versions,
+            Library = shared.Library,
+            Assets = shared.Assets,
+            Runtime = shared.Runtime,
+        };
+        return isolated;
     }
 
     /// <summary>解析版本 JSON 里的 Java 运行时组件名(优先 component 字段,缺省按大版本映射)。</summary>
@@ -83,6 +124,24 @@ public class LaunchService
         return int.TryParse(javaVersion.MajorVersion, out var major)
             ? MojangJavaInstaller.ResolveComponent(major)
             : null;
+    }
+
+    /// <summary>
+    /// 确保有可用的 Java:探测 JAVA_HOME 与常见目录,找不到时按所选版本
+    /// 自动下载微软官方运行时到 %APPDATA%/Daybreak/runtime。
+    /// </summary>
+    public async Task<string?> EnsureJavaAsync(
+        string versionId, string? configuredJavaDirectory, IProgress<LaunchProgress>? progress)
+    {
+        var found = JavaLocator.FindJava(configuredJavaDirectory);
+        if (found is not null)
+            return found;
+
+        var component = await GetJavaComponentAsync(versionId) ?? MojangJavaInstaller.DefaultComponent;
+        var installRoot = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Daybreak", "runtime");
+        var runtimeDir = await new MojangJavaInstaller(_mirror).InstallAsync(installRoot, component, progress);
+        return Path.Combine(runtimeDir, "bin", "java.exe");
     }
 
     /// <summary>官方清单全部版本(含快照与历史版本),清单自带最新在前。</summary>
@@ -136,6 +195,17 @@ public class LaunchService
         await launcher.InstallAsync(versionId);
     }
 
+    /// <summary>安装时同样遵循版本隔离(把该版本的游戏文件装进隔离目录)。</summary>
+    public async Task InstallAsync(string versionId, bool isolate, IProgress<LaunchProgress>? progress)
+    {
+        var path = isolate ? ResolvePathForVersion(versionId) : CreateGamePath();
+        var http = new HttpClient(new ResilientHttpHandler(_mirror));
+        var parameters = MinecraftLauncherParameters.CreateDefault(path, http);
+        var launcher = new MinecraftLauncher(parameters);
+        HookProgress(launcher, progress);
+        await launcher.InstallAsync(versionId);
+    }
+
     /// <summary>确保版本文件完整后启动游戏(离线 / 正版 / 外置会话)。</summary>
     public async Task<Process> LaunchAsync(
         LaunchRequest request,
@@ -151,6 +221,7 @@ public class LaunchService
             Session = request.Session ?? MSession.CreateOfflineSession(request.PlayerName),
             MaximumRamMb = request.MaxMemoryMb,
             JavaPath = string.IsNullOrWhiteSpace(request.JavaPath) ? null : request.JavaPath,
+            Path = ResolvePathForVersion(request.VersionId),
         };
 
         if (!string.IsNullOrWhiteSpace(request.JavaAgentJarPath) &&

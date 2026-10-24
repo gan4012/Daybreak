@@ -4,6 +4,7 @@ using CmlLib.Core.VersionMetadata;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Daybreak.Core.Game;
+using Daybreak.Core.Mod;
 using Daybreak.Core.Storage;
 using Serilog;
 
@@ -40,6 +41,7 @@ public partial class DownloadViewModel : ObservableObject
 {
     private readonly LauncherConfig _config = LauncherConfig.Load();
     private LaunchService? _launchService;
+    private LoaderService? _loaderService;
     private List<OnlineVersionItem> _allVersions = [];
 
     public ObservableCollection<OnlineVersionItem> Versions { get; } = [];
@@ -70,13 +72,85 @@ public partial class DownloadViewModel : ObservableObject
 
     private string _statusSuffix = "";
 
-    public DownloadViewModel() => _ = RefreshAsync();
+    // ===== 加载器安装(M3) =====
+
+    public ObservableCollection<string> LoaderModes { get; } = ["原版", "Fabric", "Forge", "NeoForge"];
+
+    public ObservableCollection<string> GameVersions { get; } = [];
+
+    public ObservableCollection<LoaderVersionInfo> LoaderVersions { get; } = [];
+
+    [ObservableProperty]
+    private int _selectedLoaderIndex;
+
+    [ObservableProperty]
+    private string? _selectedGameVersion;
+
+    [ObservableProperty]
+    private LoaderVersionInfo? _selectedLoaderVersion;
+
+    [ObservableProperty]
+    private bool _versionIsolation;
+
+    public bool IsLoaderMode => SelectedLoaderIndex > 0;
+
+    public bool ShowLoaderVersionCombo => SelectedLoaderIndex == 1 || SelectedLoaderIndex == 3;
+
+    public DownloadViewModel()
+    {
+        _versionIsolation = _config.VersionIsolation;
+        _ = RefreshAsync();
+    }
 
     partial void OnShowAllChanged(bool value) => ApplyFilter();
-    partial void OnIsBusyChanged(bool value) => InstallCommand.NotifyCanExecuteChanged();
+    partial void OnIsBusyChanged(bool value)
+    {
+        InstallCommand.NotifyCanExecuteChanged();
+        InstallLoaderCommand.NotifyCanExecuteChanged();
+    }
+    partial void OnVersionIsolationChanged(bool value)
+    {
+        _config.VersionIsolation = value;
+        _config.Save();
+    }
+
+    partial void OnSelectedLoaderIndexChanged(int value)
+    {
+        OnPropertyChanged(nameof(IsLoaderMode));
+        OnPropertyChanged(nameof(ShowLoaderVersionCombo));
+        SelectedLoaderVersion = null;
+        LoaderVersions.Clear();
+        if (IsLoaderMode)
+        {
+            FillGameVersions();
+            _ = LoadLoaderVersionsAsync();
+        }
+    }
+
+    partial void OnSelectedGameVersionChanged(string? value)
+    {
+        if (SelectedLoaderIndex == 2 || SelectedLoaderIndex == 3)
+        {
+            SelectedLoaderVersion = null;
+            LoaderVersions.Clear();
+            _ = LoadLoaderVersionsAsync();
+        }
+    }
+
+    private void FillGameVersions()
+    {
+        var current = SelectedGameVersion;
+        GameVersions.Clear();
+        foreach (var name in _allVersions.Where(v => v.Metadata.Type == "release").Select(v => v.Name))
+            GameVersions.Add(name);
+        SelectedGameVersion = GameVersions.Contains(current) ? current : GameVersions.FirstOrDefault();
+    }
 
     private LaunchService GetService() =>
-        _launchService ??= new LaunchService(_config.GameDirectory, _config.Mirror);
+        _launchService ??= new LaunchService(_config.GameDirectory, _config.Mirror, _config.VersionIsolation);
+
+    private LoaderService GetLoaderService() =>
+        _loaderService ??= new LoaderService(_config.GameDirectory, _config.Mirror);
 
     [RelayCommand]
     private async Task RefreshAsync()
@@ -101,6 +175,8 @@ public partial class DownloadViewModel : ObservableObject
 
             ApplyFilter();
             RefreshInstalledList();
+            if (IsLoaderMode)
+                FillGameVersions();
             _statusSuffix = $"({_config.Mirror switch { "bmclapi" => "BMCLAPI 镜像", _ => "官方源" }})";
             StatusText = $"共 {_allVersions.Count} 个版本{_statusSuffix}";
             Log.Information("版本清单获取成功:{Count} 个版本", _allVersions.Count);
@@ -197,6 +273,111 @@ public partial class DownloadViewModel : ObservableObject
             IsBusy = false;
             CurrentFile = null;
             ActiveDownloadName = null;
+            DownloadedBytesDisplay = "";
+        }
+    }
+
+    // ===== 加载器安装 =====
+
+    private async Task LoadLoaderVersionsAsync()
+    {
+        if (SelectedLoaderIndex == 0 || string.IsNullOrEmpty(SelectedGameVersion) || IsBusy)
+            return;
+
+        IsBusy = true;
+        StatusText = $"正在获取 {(LoaderModes[SelectedLoaderIndex])} 版本列表…";
+        try
+        {
+            var versions = SelectedLoaderIndex switch
+            {
+                1 => (await GetLoaderService().GetFabricLoaderVersionsAsync())
+                    .Select(n => new LoaderVersionInfo(n, false, false)),
+                2 => await GetLoaderService().GetForgeVersionsAsync(SelectedGameVersion!),
+                3 => await GetLoaderService().GetNeoForgeVersionsAsync(SelectedGameVersion!),
+                _ => throw new InvalidOperationException(),
+            };
+
+            LoaderVersions.Clear();
+            foreach (var version in versions)
+                LoaderVersions.Add(version);
+
+            SelectedLoaderVersion = versions.FirstOrDefault();
+            StatusText = $"{LoaderModes[SelectedLoaderIndex]} 共 {LoaderVersions.Count} 个可用版本{_statusSuffix}";
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"获取 {LoaderModes[SelectedLoaderIndex]} 版本列表失败:" + ex.Message;
+            Log.Warning(ex, "加载器版本列表获取失败");
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    private bool CanInstallLoader() =>
+        !IsBusy && IsLoaderMode &&
+        !string.IsNullOrEmpty(SelectedGameVersion) && SelectedLoaderVersion is not null;
+
+    [RelayCommand(CanExecute = nameof(CanInstallLoader))]
+    private async Task InstallLoaderAsync()
+    {
+        if (SelectedGameVersion is null || SelectedLoaderVersion is null)
+            return;
+
+        IsBusy = true;
+        ProgressPercent = 0;
+        CurrentFile = null;
+        DownloadedBytesDisplay = "";
+        var loaderName = LoaderModes[SelectedLoaderIndex];
+        ActiveDownloadName = $"{loaderName} {SelectedGameVersion}";
+        StatusText = $"正在安装 {ActiveDownloadName}…";
+        Log.Information("开始安装加载器 {Loader} {Game} {LoaderVersion}",
+            loaderName, SelectedGameVersion, SelectedLoaderVersion.Name);
+
+        IProgress<LaunchProgress> uiProgress = new Progress<LaunchProgress>(p =>
+        {
+            if (p.TotalTasks > 0)
+            {
+                var percent = Math.Max(ProgressPercent, p.Percent);
+                ProgressPercent = percent;
+            }
+            CurrentFile = p.CurrentFile;
+            if (p.TotalBytes > 0)
+                DownloadedBytesDisplay =
+                    $"{FormatBytes(p.ProgressedBytes)} / {FormatBytes(p.TotalBytes)}";
+        });
+
+        try
+        {
+            var javaPath = await GetService().EnsureJavaAsync(
+                SelectedGameVersion, _config.JavaDirectory, uiProgress);
+
+            var newVersionName = SelectedLoaderIndex switch
+            {
+                1 => await GetLoaderService().InstallFabricAsync(
+                    SelectedGameVersion, SelectedLoaderVersion.Name, uiProgress),
+                2 => await GetLoaderService().InstallForgeAsync(
+                    SelectedGameVersion, SelectedLoaderVersion.Name, javaPath, uiProgress),
+                3 => await GetLoaderService().InstallNeoForgeAsync(
+                    SelectedGameVersion, SelectedLoaderVersion.Name, javaPath, uiProgress),
+                _ => throw new InvalidOperationException(),
+            };
+
+            StatusText = $"{loaderName} 安装完成,新版本:{newVersionName}";
+            Log.Information("加载器安装完成:{Version}", newVersionName);
+            RefreshInstalledList();
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"{loaderName} 安装失败:" + ex.Message;
+            Log.Error(ex, "{Loader} 安装失败", loaderName);
+        }
+        finally
+        {
+            IsBusy = false;
+            ActiveDownloadName = null;
+            CurrentFile = null;
             DownloadedBytesDisplay = "";
         }
     }

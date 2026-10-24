@@ -52,7 +52,7 @@ public class MojangJavaInstaller
             return runtimeDir;
         }
 
-        using var http = new HttpClient(new MirrorHttpHandler(_mirror));
+        using var http = new HttpClient(new ResilientHttpHandler(_mirror));
 
         var manifestUrl = await ResolveManifestUrlAsync(http, component)
             ?? throw new InvalidOperationException($"清单中找不到组件 {component}(windows-x64)");

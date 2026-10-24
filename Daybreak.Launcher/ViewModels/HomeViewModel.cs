@@ -123,17 +123,12 @@ public partial class HomeViewModel : ObservableObject
                 Log($"  下载 {p.CurrentFile}");
         });
 
-        var component = await GetService().GetJavaComponentAsync(versionId)
-                        ?? MojangJavaInstaller.DefaultComponent;
-        var installRoot = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Daybreak", "runtime");
-        var runtimeDir = await new MojangJavaInstaller(_config.Mirror)
-            .InstallAsync(installRoot, component, javaProgress);
-
-        _config.JavaDirectory = runtimeDir;
+        var runtimeDir = await GetService().EnsureJavaAsync(versionId, _config.JavaDirectory, javaProgress);
+        _config.JavaDirectory = Path.GetDirectoryName(
+            Path.GetDirectoryName(runtimeDir ?? string.Empty)) ?? runtimeDir;
         _config.Save();
         Log($"[✓] Java 运行时就绪:{runtimeDir}");
-        return Path.Combine(runtimeDir, "bin", "java.exe");
+        return runtimeDir;
     }
 
     [RelayCommand(CanExecute = nameof(CanLaunch))]

@@ -11,6 +11,7 @@
     <Grid Margin="32,28,32,24">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
@@ -32,9 +33,54 @@
             <TextBlock Text="显示快照与历史版本" Opacity="0.8" VerticalAlignment="Center" Margin="8,0,0,0" />
         </StackPanel>
 
+        <!-- Mod 加载器安装(M3) -->
+        <Border
+            Grid.Row="1"
+            Style="{StaticResource GlassCard}"
+            Padding="14,10"
+            Margin="0,14,0,0">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="Mod 加载器:" FontSize="13" VerticalAlignment="Center" Opacity="0.85" />
+                <ComboBox
+                    ItemsSource="{Binding LoaderModes}"
+                    SelectedIndex="{Binding SelectedLoaderIndex}"
+                    MinWidth="110"
+                    MinHeight="32"
+                    Margin="8,0,0,0" />
+                <ComboBox
+                    ItemsSource="{Binding GameVersions}"
+                    SelectedItem="{Binding SelectedGameVersion}"
+                    MinWidth="130"
+                    MinHeight="32"
+                    Margin="12,0,0,0"
+                    Visibility="{Binding IsLoaderMode, Converter={StaticResource BoolToVisibility}}" />
+                <ComboBox
+                    ItemsSource="{Binding LoaderVersions}"
+                    SelectedItem="{Binding SelectedLoaderVersion}"
+                    DisplayMemberPath="Name"
+                    MinWidth="190"
+                    MinHeight="32"
+                    Margin="8,0,0,0"
+                    Visibility="{Binding ShowLoaderVersionCombo, Converter={StaticResource BoolToVisibility}}" />
+                <Button
+                    Command="{Binding InstallLoaderCommand}"
+                    Content="安装加载器"
+                    Style="{StaticResource BrandPrimaryButton}"
+                    MinWidth="110"
+                    Margin="12,0,0,0"
+                    Visibility="{Binding IsLoaderMode, Converter={StaticResource BoolToVisibility}}" />
+                <ui:ToggleSwitch
+                    IsChecked="{Binding VersionIsolation, Mode=TwoWay}"
+                    ToolTip="每个版本独立的存档与配置目录(libraries/assets 仍共享)"
+                    Margin="14,0,0,0"
+                    VerticalAlignment="Center" />
+                <TextBlock Text="版本隔离" Opacity="0.8" VerticalAlignment="Center" Margin="6,0,0,0" />
+            </StackPanel>
+        </Border>
+
         <!-- 版本列表 -->
         <ListBox
-            Grid.Row="1"
+            Grid.Row="2"
             ItemsSource="{Binding Versions}"
             Background="Transparent"
             BorderThickness="0"
@@ -138,7 +184,7 @@
 
         <!-- 下载中心:当前任务 + 已安装列表(常驻) -->
         <Border
-            Grid.Row="2"
+            Grid.Row="3"
             Style="{StaticResource GlassCard}"
             Padding="16,12"
             Margin="0,14,0,0">

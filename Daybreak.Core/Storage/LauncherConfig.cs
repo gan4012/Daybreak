@@ -29,6 +29,9 @@ public class LauncherConfig
     /// <summary>下载镜像:official / bmclapi</summary>
     public string Mirror { get; set; } = "official";
 
+    /// <summary>版本隔离:各版本独立 saves/config 目录(共享 libraries/assets)。</summary>
+    public bool VersionIsolation { get; set; } = true;
+
     /// <summary>离线模式玩家名</summary>
     public string PlayerName { get; set; } = "Player";
 
