@@ -50,10 +50,10 @@ public class DownloadEngine
         public long Completed => Interlocked.Read(ref _completed);
     }
 
-    /// <summary>下载单个文件(分片并发)。</summary>
+    /// <summary>下载单个文件(分片并发)。expectedSize:null=大小未知;0=已知空文件。</summary>
     public async Task DownloadFileAsync(
         HttpClient http, string url, string targetPath,
-        long expectedSize = 0, string? sha1 = null,
+        long? expectedSize = null, string? sha1 = null,
         CancellationToken cancellationToken = default)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(targetPath)!);
@@ -83,7 +83,7 @@ public class DownloadEngine
         else
             await DownloadSingleStreamAsync(http, url, partPath, cancellationToken);
 
-        VerifySize(partPath, totalSize > 0 ? totalSize : expectedSize, targetPath);
+        VerifySize(partPath, totalSize > 0 ? totalSize : expectedSize ?? 0, targetPath);
         VerifySha1(partPath, sha1, targetPath);
         File.Move(partPath, targetPath, overwrite: true);
     }
