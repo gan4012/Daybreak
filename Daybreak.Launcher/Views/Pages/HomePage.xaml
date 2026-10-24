@@ -59,10 +59,10 @@
                             MinHeight="36" />
                         <ui:Button
                             Grid.Column="2"
-                            Command="{Binding DownloadJavaCommand}"
+                            Command="{Binding OpenJavaDownloadSiteCommand}"
                             Icon="{ui:SymbolIcon DrinkCoffee24}"
                             Content="下载 Java"
-                            ToolTip="自动下载与所选版本匹配的官方 Java 运行时"
+                            ToolTip="打开 Java(Adoptium Temurin)官方下载页,含 17 / 21 等新版本"
                             Margin="12,0,0,0"
                             MinHeight="36" />
                         <Button

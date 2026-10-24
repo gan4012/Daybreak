@@ -57,7 +57,7 @@ public partial class HomeViewModel : ObservableObject
     partial void OnIsBusyChanged(bool value)
     {
         LaunchCommand.NotifyCanExecuteChanged();
-        DownloadJavaCommand.NotifyCanExecuteChanged();
+        OpenJavaDownloadSiteCommand.NotifyCanExecuteChanged();
     }
 
     partial void OnSelectedVersionChanged(string? value) => LaunchCommand.NotifyCanExecuteChanged();
@@ -93,52 +93,21 @@ public partial class HomeViewModel : ObservableObject
     private bool CanDownloadJava() => !IsBusy;
 
     [RelayCommand(CanExecute = nameof(CanDownloadJava))]
-    private async Task DownloadJavaAsync()
+    private void OpenJavaDownloadSite()
     {
-        if (SelectedVersion is null)
-        {
-            StatusText = "请先在版本列表中选择一个版本,将按该版本自动匹配合适的 Java";
-            return;
-        }
-
-        IsBusy = true;
-        ProgressPercent = 0;
-        Log("—— 开始获取 Java 运行时 ——");
-
-        IProgress<LaunchProgress> uiProgress = new Progress<LaunchProgress>(p =>
-        {
-            if (p.TotalTasks > 0)
-                ProgressPercent = Math.Max(ProgressPercent, p.Percent);
-            if (!string.IsNullOrEmpty(p.CurrentFile))
-                Log($"  下载 {p.CurrentFile}");
-        });
-
+        // java.com 只有 Java 8;Adoptium 是新版本 MC 需要的 17/21 的免费官方渠道,
+        // 链接已预筛 Windows x64 JRE
+        const string url = "https://adoptium.net/temurin/releases/?os=windows&arch=x64&package=jre";
         try
         {
-            // 先问版本 JSON 要组件名,拿不到再按大版本兜底
-            var component = await GetService().GetJavaComponentAsync(SelectedVersion);
-            Log($"  目标运行时:{component ?? MojangJavaInstaller.DefaultComponent}(默认 Java 21)");
-
-            var installRoot = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Daybreak", "runtime");
-            var runtimeDir = await new MojangJavaInstaller(_config.Mirror)
-                .InstallAsync(installRoot, component ?? MojangJavaInstaller.DefaultComponent, uiProgress);
-
-            _config.JavaDirectory = runtimeDir;
-            _config.Save();
-
-            StatusText = $"Java 运行时就绪:{runtimeDir}";
-            ProgressPercent = 100;
-            Log($"[✓] Java 已安装到 {runtimeDir},可以启动游戏了");
+            Process.Start(new ProcessStartInfo { FileName = url, UseShellExecute = true });
+            Log($"已打开 Java 下载页:{url}");
+            StatusText = "已打开 Java 官方下载页;安装后如未被自动识别,请在设置页填写 Java 路径";
         }
         catch (Exception ex)
         {
-            StatusText = "Java 下载失败:" + ex.Message;
-            Log($"[!] Java 下载失败:{ex}");
-        }
-        finally
-        {
-            IsBusy = false;
+            StatusText = "打开浏览器失败,请手动访问:" + url;
+            Log($"[!] 打开浏览器失败:{ex.Message}");
         }
     }
 
