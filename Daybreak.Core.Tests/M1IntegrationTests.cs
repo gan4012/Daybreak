@@ -49,4 +49,39 @@ public class M1IntegrationTests
             try { Directory.Delete(tempDir, recursive: true); } catch { /* 清理失败不影响断言 */ }
         }
     }
+
+    [Fact]
+    public async Task InstallJavaRuntime_CompletesIntoTempDir()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "daybreak-java-test", Guid.NewGuid().ToString("N"));
+        var installer = new MojangJavaInstaller(DownloadMirror.Official);
+        var progress = new Progress<LaunchProgress>(p =>
+            _output.WriteLine($"  Java {p.Percent}% ({p.ProgressedTasks}/{p.TotalTasks}) {p.CurrentFile}"));
+
+        try
+        {
+            // jre-legacy(Java 8)是官方清单里最小的运行时
+            var runtimeDir = await installer.InstallAsync(tempDir, "jre-legacy", progress);
+
+            var javaExe = Path.Combine(runtimeDir, "bin", "java.exe");
+            Assert.True(File.Exists(javaExe), "bin/java.exe 不存在");
+
+            var proc = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = javaExe,
+                Arguments = "-version",
+                RedirectStandardError = true,
+                RedirectStandardOutput = true,
+                UseShellExecute = false,
+            })!;
+            var output = await proc.StandardError.ReadToEndAsync();
+            proc.WaitForExit(30_000);
+            _output.WriteLine($"java -version => {output.Trim()}");
+            Assert.Contains("1.8", output);
+        }
+        finally
+        {
+            try { Directory.Delete(tempDir, recursive: true); } catch { /* 清理失败不影响断言 */ }
+        }
+    }
 }

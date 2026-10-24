@@ -44,6 +44,7 @@
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
                         <ComboBox
                             ItemsSource="{Binding InstalledVersions}"
@@ -56,8 +57,16 @@
                             Content="刷新"
                             Margin="12,0,0,0"
                             MinHeight="36" />
-                        <Button
+                        <ui:Button
                             Grid.Column="2"
+                            Command="{Binding DownloadJavaCommand}"
+                            Icon="{ui:SymbolIcon DrinkCoffee24}"
+                            Content="下载 Java"
+                            ToolTip="自动下载与所选版本匹配的官方 Java 运行时"
+                            Margin="12,0,0,0"
+                            MinHeight="36" />
+                        <Button
+                            Grid.Column="3"
                             Command="{Binding LaunchCommand}"
                             Content="启动游戏"
                             Style="{StaticResource BrandPrimaryButton}"

@@ -2,6 +2,7 @@ using System.Diagnostics;
 using CmlLib.Core;
 using CmlLib.Core.Auth;
 using CmlLib.Core.ProcessBuilder;
+using CmlLib.Core.Version;
 using CmlLib.Core.VersionMetadata;
 
 namespace Daybreak.Core.Game;
@@ -54,6 +55,23 @@ public class LaunchService
         var gamePath = new MinecraftPath(ResolveGameDirectory());
         var parameters = MinecraftLauncherParameters.CreateDefault(gamePath, http);
         return new MinecraftLauncher(parameters);
+    }
+
+    /// <summary>解析版本 JSON 里的 Java 运行时组件名(优先 component 字段,缺省按大版本映射)。</summary>
+    public async Task<string?> GetJavaComponentAsync(string versionId)
+    {
+        var launcher = CreateLauncher();
+        var version = await launcher.GetVersionAsync(versionId);
+        var javaVersion = version.GetInheritedProperty(v => v.JavaVersion);
+        if (javaVersion is null)
+            return null;
+
+        if (!string.IsNullOrEmpty(javaVersion.Component))
+            return javaVersion.Component;
+
+        return int.TryParse(javaVersion.MajorVersion, out var major)
+            ? MojangJavaInstaller.ResolveComponent(major)
+            : null;
     }
 
     /// <summary>官方清单全部版本(含快照与历史版本),清单自带最新在前。</summary>

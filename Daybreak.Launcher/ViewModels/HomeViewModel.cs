@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
+using System.IO;
 using System.Text;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -53,7 +54,12 @@ public partial class HomeViewModel : ObservableObject
         _config.Save();
     }
 
-    partial void OnIsBusyChanged(bool value) => LaunchCommand.NotifyCanExecuteChanged();
+    partial void OnIsBusyChanged(bool value)
+    {
+        LaunchCommand.NotifyCanExecuteChanged();
+        DownloadJavaCommand.NotifyCanExecuteChanged();
+    }
+
     partial void OnSelectedVersionChanged(string? value) => LaunchCommand.NotifyCanExecuteChanged();
 
     private LaunchService GetService() =>
@@ -83,6 +89,58 @@ public partial class HomeViewModel : ObservableObject
     }
 
     private bool CanLaunch() => !IsBusy && SelectedVersion is not null;
+
+    private bool CanDownloadJava() => !IsBusy;
+
+    [RelayCommand(CanExecute = nameof(CanDownloadJava))]
+    private async Task DownloadJavaAsync()
+    {
+        if (SelectedVersion is null)
+        {
+            StatusText = "请先在版本列表中选择一个版本,将按该版本自动匹配合适的 Java";
+            return;
+        }
+
+        IsBusy = true;
+        ProgressPercent = 0;
+        Log("—— 开始获取 Java 运行时 ——");
+
+        IProgress<LaunchProgress> uiProgress = new Progress<LaunchProgress>(p =>
+        {
+            if (p.TotalTasks > 0)
+                ProgressPercent = Math.Max(ProgressPercent, p.Percent);
+            if (!string.IsNullOrEmpty(p.CurrentFile))
+                Log($"  下载 {p.CurrentFile}");
+        });
+
+        try
+        {
+            // 先问版本 JSON 要组件名,拿不到再按大版本兜底
+            var component = await GetService().GetJavaComponentAsync(SelectedVersion);
+            Log($"  目标运行时:{component ?? MojangJavaInstaller.DefaultComponent}(默认 Java 21)");
+
+            var installRoot = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Daybreak", "runtime");
+            var runtimeDir = await new MojangJavaInstaller(_config.Mirror)
+                .InstallAsync(installRoot, component ?? MojangJavaInstaller.DefaultComponent, uiProgress);
+
+            _config.JavaDirectory = runtimeDir;
+            _config.Save();
+
+            StatusText = $"Java 运行时就绪:{runtimeDir}";
+            ProgressPercent = 100;
+            Log($"[✓] Java 已安装到 {runtimeDir},可以启动游戏了");
+        }
+        catch (Exception ex)
+        {
+            StatusText = "Java 下载失败:" + ex.Message;
+            Log($"[!] Java 下载失败:{ex}");
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
 
     [RelayCommand(CanExecute = nameof(CanLaunch))]
     private async Task LaunchAsync()
