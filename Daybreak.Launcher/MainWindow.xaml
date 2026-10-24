@@ -10,12 +10,47 @@
     MinWidth="960"
     MinHeight="640"
     WindowStartupLocation="CenterScreen"
-    WindowBackdropType="Mica"
+    WindowBackdropType="Acrylic"
     ExtendsContentIntoTitleBar="True">
 
     <Grid>
+        <!--
+            玻璃后面的黎明光晕:三团模糊色块,给亚克力背景和玻璃卡片
+            提供可透出的色彩层次(纯装饰,不响应鼠标)。
+        -->
+        <Canvas IsHitTestVisible="False">
+            <Ellipse Canvas.Left="720" Canvas.Top="-180" Width="640" Height="640">
+                <Ellipse.Fill>
+                    <SolidColorBrush Color="#5EFF8A3D" />
+                </Ellipse.Fill>
+                <Ellipse.Effect>
+                    <BlurEffect Radius="140" />
+                </Ellipse.Effect>
+            </Ellipse>
+            <Ellipse Canvas.Left="-260" Canvas.Top="220" Width="620" Height="620">
+                <Ellipse.Fill>
+                    <SolidColorBrush Color="#4DF4517F" />
+                </Ellipse.Fill>
+                <Ellipse.Effect>
+                    <BlurEffect Radius="160" />
+                </Ellipse.Effect>
+            </Ellipse>
+            <Ellipse Canvas.Left="380" Canvas.Top="480" Width="560" Height="560">
+                <Ellipse.Fill>
+                    <SolidColorBrush Color="#40FFC64D" />
+                </Ellipse.Fill>
+                <Ellipse.Effect>
+                    <BlurEffect Radius="150" />
+                </Ellipse.Effect>
+            </Ellipse>
+        </Canvas>
+
+        <!-- 轻暗色罩:压低背景亮度,保证玻璃卡片上的文字对比度,同时保留亚克力透明感 -->
+        <Rectangle Fill="#4D101418" IsHitTestVisible="False" />
+
         <ui:NavigationView
             x:Name="RootNavigation"
+            Background="Transparent"
             PaneDisplayMode="Left"
             IsBackButtonVisible="Collapsed"
             IsPaneToggleVisible="True">

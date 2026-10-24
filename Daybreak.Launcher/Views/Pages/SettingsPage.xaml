@@ -8,7 +8,7 @@
         <StackPanel MaxWidth="960" Margin="32,28,32,24">
             <TextBlock Text="设置" FontSize="26" FontWeight="SemiBold" />
 
-            <Border Style="{StaticResource BrandCard}" Margin="0,16,0,0">
+            <Border Style="{StaticResource GlassCard}" Margin="0,16,0,0">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
@@ -24,7 +24,7 @@
                 </Grid>
             </Border>
 
-            <Border Style="{StaticResource BrandCard}" Margin="0,12,0,0">
+            <Border Style="{StaticResource GlassCard}" Margin="0,12,0,0">
                 <StackPanel>
                     <TextBlock Text="游戏目录" FontSize="15" FontWeight="SemiBold" />
                     <TextBlock
@@ -34,7 +34,7 @@
                 </StackPanel>
             </Border>
 
-            <Border Style="{StaticResource BrandCard}" Margin="0,12,0,0">
+            <Border Style="{StaticResource GlassCard}" Margin="0,12,0,0">
                 <StackPanel>
                     <TextBlock Text="下载镜像" FontSize="15" FontWeight="SemiBold" />
                     <TextBlock

@@ -7,7 +7,7 @@
     <ScrollViewer VerticalScrollBarVisibility="Auto">
         <StackPanel MaxWidth="960" Margin="32,28,32,24">
 
-            <Border Style="{StaticResource BrandCard}" Padding="32">
+            <Border Style="{StaticResource GlassCard}" Padding="32">
                 <StackPanel>
                     <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
                         <ui:SymbolIcon Symbol="WeatherSunny24" FontSize="28" Foreground="{StaticResource BrandAccentBrush}" />
@@ -36,21 +36,21 @@
             </Border>
 
             <UniformGrid Columns="3" Margin="0,16,0,0">
-                <Border Style="{StaticResource BrandCard}" Margin="0,0,8,0">
+                <Border Style="{StaticResource GlassCard}" Margin="0,0,8,0">
                     <StackPanel>
                         <ui:SymbolIcon Symbol="ArrowDownload24" FontSize="22" Foreground="{StaticResource BrandPrimaryBrush}" />
                         <TextBlock Text="版本下载" FontSize="16" FontWeight="SemiBold" Margin="0,10,0,4" />
                         <TextBlock Text="官方源 + BMCLAPI 镜像双通道,占位待 M1。" Opacity="0.7" TextWrapping="Wrap" />
                     </StackPanel>
                 </Border>
-                <Border Style="{StaticResource BrandCard}" Margin="8,0">
+                <Border Style="{StaticResource GlassCard}" Margin="8,0">
                     <StackPanel>
                         <ui:SymbolIcon Symbol="PersonAccounts24" FontSize="22" Foreground="{StaticResource BrandPrimaryBrush}" />
                         <TextBlock Text="多登录方式" FontSize="16" FontWeight="SemiBold" Margin="0,10,0,4" />
                         <TextBlock Text="正版 / 离线 / 外置登录,占位待 M2。" Opacity="0.7" TextWrapping="Wrap" />
                     </StackPanel>
                 </Border>
-                <Border Style="{StaticResource BrandCard}" Margin="8,0,0,0">
+                <Border Style="{StaticResource GlassCard}" Margin="8,0,0,0">
                     <StackPanel>
                         <ui:SymbolIcon Symbol="PuzzlePiece24" FontSize="22" Foreground="{StaticResource BrandPrimaryBrush}" />
                         <TextBlock Text="资源市场" FontSize="16" FontWeight="SemiBold" Margin="0,10,0,4" />

@@ -7,7 +7,7 @@
     <ScrollViewer VerticalScrollBarVisibility="Auto">
         <StackPanel MaxWidth="960" Margin="32,28,32,24">
             <TextBlock Text="资源市场" FontSize="26" FontWeight="SemiBold" />
-            <Border Style="{StaticResource BrandCard}" Margin="0,16,0,0">
+            <Border Style="{StaticResource GlassCard}" Margin="0,16,0,0">
                 <StackPanel>
                     <ui:SymbolIcon Symbol="PuzzlePiece24" FontSize="24" Foreground="{StaticResource BrandAccentBrush}" />
                     <TextBlock Text="Modrinth 接入准备中" FontSize="15" Margin="0,10,0,0" />

@@ -7,7 +7,7 @@
     <ScrollViewer VerticalScrollBarVisibility="Auto">
         <StackPanel MaxWidth="960" Margin="32,28,32,24">
             <TextBlock Text="版本管理" FontSize="26" FontWeight="SemiBold" />
-            <Border Style="{StaticResource BrandCard}" Margin="0,16,0,0">
+            <Border Style="{StaticResource GlassCard}" Margin="0,16,0,0">
                 <StackPanel>
                     <ui:SymbolIcon Symbol="GridDots24" FontSize="24" Foreground="{StaticResource BrandAccentBrush}" />
                     <TextBlock Text="还没有游戏版本" FontSize="15" Margin="0,10,0,0" />

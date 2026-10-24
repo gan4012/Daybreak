@@ -5,6 +5,11 @@
     <!--
         Daybreak 品牌色板:黎明色系(金橙 → 暮粉 → 暖金)。
         所有页面引用这些 token,改品牌色只动这一个文件。
+
+        玻璃拟态(Liquid Glass)设计规则:
+        - 玻璃填充用极低不透明度的白(GlassFillBrush),让底层光晕 / 系统亚克力透出
+        - 描边用左上亮、右下暗的对角渐变(GlassRimBrush),模拟玻璃边缘的折射高光
+        - 大圆角(20px)+ 柔和投影,呈现悬浮的玻璃片质感
     -->
     <Color x:Key="BrandPrimaryColor">#FF8A3D</Color>
     <Color x:Key="BrandSecondaryColor">#F4517F</Color>
@@ -24,21 +29,90 @@
         <GradientStop Color="{StaticResource BrandPrimaryColor}" Offset="1" />
     </LinearGradientBrush>
 
-    <!-- 圆角卡片 -->
-    <Style x:Key="BrandCard" TargetType="Border">
-        <Setter Property="Background" Value="{DynamicResource ControlFillColorDefaultBrush}" />
-        <Setter Property="BorderBrush" Value="{DynamicResource ControlStrokeColorSecondaryBrush}" />
+    <!-- ===== 玻璃拟态 token ===== -->
+
+    <!-- 玻璃本体:极低透明度白,底色透出 -->
+    <SolidColorBrush x:Key="GlassFillBrush" Color="#14FFFFFF" />
+
+    <!-- 玻璃边缘折射:左上高光 → 中段近透明 → 右下微亮 -->
+    <LinearGradientBrush x:Key="GlassRimBrush" StartPoint="0,0" EndPoint="1,1">
+        <GradientStop Color="#59FFFFFF" Offset="0" />
+        <GradientStop Color="#0DFFFFFF" Offset="0.45" />
+        <GradientStop Color="#2EFFFFFF" Offset="1" />
+    </LinearGradientBrush>
+
+    <!-- 顶部内高光:模拟光线打在玻璃上沿 -->
+    <LinearGradientBrush x:Key="GlassSheenBrush" StartPoint="0,0" EndPoint="0,1">
+        <GradientStop Color="#26FFFFFF" Offset="0" />
+        <GradientStop Color="#00FFFFFF" Offset="1" />
+    </LinearGradientBrush>
+
+    <!-- 玻璃卡片 -->
+    <Style x:Key="GlassCard" TargetType="Border">
+        <Setter Property="Background" Value="{StaticResource GlassFillBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource GlassRimBrush}" />
         <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="CornerRadius" Value="10" />
-        <Setter Property="Padding" Value="20" />
+        <Setter Property="CornerRadius" Value="20" />
+        <Setter Property="Padding" Value="24" />
+        <Setter Property="Effect">
+            <Setter.Value>
+                <DropShadowEffect
+                    BlurRadius="36"
+                    ShadowDepth="10"
+                    Direction="270"
+                    Opacity="0.38"
+                    Color="#000000" />
+            </Setter.Value>
+        </Setter>
     </Style>
 
-    <!-- 品牌主按钮 -->
-    <Style x:Key="BrandPrimaryButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-        <Setter Property="Background" Value="{StaticResource BrandGradientBrush}" />
+    <!-- 品牌主按钮:液态玻璃质感,独立模板保证渐变不被控件库默认样式覆盖 -->
+    <LinearGradientBrush x:Key="BrandButtonBrush" StartPoint="0,0" EndPoint="1,1">
+        <GradientStop Color="#F2FF8A3D" Offset="0" />
+        <GradientStop Color="#E6F4517F" Offset="1" />
+    </LinearGradientBrush>
+    <LinearGradientBrush x:Key="BrandButtonHoverBrush" StartPoint="0,0" EndPoint="1,1">
+        <GradientStop Color="#FFFF9E57" Offset="0" />
+        <GradientStop Color="#F2FF6B92" Offset="1" />
+    </LinearGradientBrush>
+
+    <Style x:Key="BrandPrimaryButton" TargetType="Button">
+        <Setter Property="Background" Value="{StaticResource BrandButtonBrush}" />
         <Setter Property="Foreground" Value="White" />
-        <Setter Property="BorderThickness" Value="0" />
-        <Setter Property="Padding" Value="24,10" />
+        <Setter Property="BorderBrush" Value="{StaticResource GlassRimBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Padding" Value="26,11" />
         <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border
+                        x:Name="Root"
+                        Background="{TemplateBinding Background}"
+                        BorderBrush="{TemplateBinding BorderBrush}"
+                        BorderThickness="{TemplateBinding BorderThickness}"
+                        CornerRadius="12"
+                        Padding="{TemplateBinding Padding}">
+                        <ContentPresenter
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center"
+                            RecognizesAccessKey="True"
+                            SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Root" Property="Background" Value="{StaticResource BrandButtonHoverBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="Root" Property="Opacity" Value="0.85" />
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="Root" Property="Opacity" Value="0.45" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
     </Style>
 </ResourceDictionary>
