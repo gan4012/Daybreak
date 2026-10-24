@@ -20,6 +20,7 @@ public class LauncherConfigTests : IDisposable
         Assert.Equal("Dark", config.ThemeMode);
         Assert.Equal("Acrylic", config.Backdrop);
         Assert.Equal("official", config.Mirror);
+        Assert.Equal("Player", config.PlayerName);
         Assert.Equal(4096, config.MaxMemoryMb);
     }
 

@@ -16,6 +16,8 @@ public partial class App : Application
         {
             services.AddSingleton<MainWindowViewModel>();
             services.AddSingleton<SettingsViewModel>();
+            services.AddTransient<HomeViewModel>();
+            services.AddTransient<DownloadViewModel>();
             services.AddSingleton<MainWindow>();
             services.AddTransient<Views.Pages.HomePage>();
             services.AddTransient<Views.Pages.DownloadPage>();

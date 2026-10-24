@@ -29,6 +29,9 @@ public class LauncherConfig
     /// <summary>下载镜像:official / bmclapi</summary>
     public string Mirror { get; set; } = "official";
 
+    /// <summary>离线模式玩家名</summary>
+    public string PlayerName { get; set; } = "Player";
+
     /// <summary>测试用存储目录重定向;生产环境必须保持为 null。</summary>
     internal static string? DirectoryOverrideForTests;
 
