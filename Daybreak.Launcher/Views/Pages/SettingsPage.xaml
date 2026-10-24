@@ -1,0 +1,48 @@
+<Page 
+    x:Class="Daybreak.Launcher.Views.Pages.SettingsPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml">
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel MaxWidth="960" Margin="32,28,32,24">
+            <TextBlock Text="设置" FontSize="26" FontWeight="SemiBold" />
+
+            <Border Style="{StaticResource BrandCard}" Margin="0,16,0,0">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                        <TextBlock Text="深色主题" FontSize="15" FontWeight="SemiBold" />
+                        <TextBlock Text="切换启动器的亮 / 暗外观,设置会自动保存。" Opacity="0.7" Margin="0,2,0,0" />
+                    </StackPanel>
+                    <ui:ToggleSwitch
+                        Grid.Column="1"
+                        IsChecked="{Binding IsDarkTheme, Mode=TwoWay}" />
+                </Grid>
+            </Border>
+
+            <Border Style="{StaticResource BrandCard}" Margin="0,12,0,0">
+                <StackPanel>
+                    <TextBlock Text="游戏目录" FontSize="15" FontWeight="SemiBold" />
+                    <TextBlock
+                        Text="{Binding Config.GameDirectory, TargetNullValue='未设置(默认 %APPDATA%\.minecraft),M1 里程碑开放修改'}"
+                        Opacity="0.7"
+                        Margin="0,2,0,0" />
+                </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource BrandCard}" Margin="0,12,0,0">
+                <StackPanel>
+                    <TextBlock Text="下载镜像" FontSize="15" FontWeight="SemiBold" />
+                    <TextBlock
+                        Text="{Binding Config.Mirror, FallbackValue='official'}"
+                        Opacity="0.7"
+                        Margin="0,2,0,0" />
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</Page>

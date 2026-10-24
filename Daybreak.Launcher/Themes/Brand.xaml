@@ -1,0 +1,44 @@
+<ResourceDictionary
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!--
+        Daybreak 品牌色板:黎明色系(金橙 → 暮粉 → 暖金)。
+        所有页面引用这些 token,改品牌色只动这一个文件。
+    -->
+    <Color x:Key="BrandPrimaryColor">#FF8A3D</Color>
+    <Color x:Key="BrandSecondaryColor">#F4517F</Color>
+    <Color x:Key="BrandAccentColor">#FFC64D</Color>
+
+    <SolidColorBrush x:Key="BrandPrimaryBrush" Color="{StaticResource BrandPrimaryColor}" />
+    <SolidColorBrush x:Key="BrandSecondaryBrush" Color="{StaticResource BrandSecondaryColor}" />
+    <SolidColorBrush x:Key="BrandAccentBrush" Color="{StaticResource BrandAccentColor}" />
+
+    <LinearGradientBrush x:Key="BrandGradientBrush" StartPoint="0,0" EndPoint="1,1">
+        <GradientStop Color="{StaticResource BrandPrimaryColor}" Offset="0" />
+        <GradientStop Color="{StaticResource BrandSecondaryColor}" Offset="1" />
+    </LinearGradientBrush>
+
+    <LinearGradientBrush x:Key="BrandGlowBrush" StartPoint="0,0" EndPoint="0,1">
+        <GradientStop Color="{StaticResource BrandAccentColor}" Offset="0" />
+        <GradientStop Color="{StaticResource BrandPrimaryColor}" Offset="1" />
+    </LinearGradientBrush>
+
+    <!-- 圆角卡片 -->
+    <Style x:Key="BrandCard" TargetType="Border">
+        <Setter Property="Background" Value="{DynamicResource ControlFillColorDefaultBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource ControlStrokeColorSecondaryBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="10" />
+        <Setter Property="Padding" Value="20" />
+    </Style>
+
+    <!-- 品牌主按钮 -->
+    <Style x:Key="BrandPrimaryButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+        <Setter Property="Background" Value="{StaticResource BrandGradientBrush}" />
+        <Setter Property="Foreground" Value="White" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Padding" Value="24,10" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+</ResourceDictionary>

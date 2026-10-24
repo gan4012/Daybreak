@@ -1,0 +1,63 @@
+<Page 
+    x:Class="Daybreak.Launcher.Views.Pages.HomePage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml">
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel MaxWidth="960" Margin="32,28,32,24">
+
+            <Border Style="{StaticResource BrandCard}" Padding="32">
+                <StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                        <ui:SymbolIcon Symbol="WeatherSunny24" FontSize="28" Foreground="{StaticResource BrandAccentBrush}" />
+                        <TextBlock
+                            Text="Daybreak 破晓启动器"
+                            FontSize="32"
+                            FontWeight="Bold"
+                            Margin="10,0,0,0" />
+                    </StackPanel>
+                    <TextBlock
+                        Text="M0 里程碑 · 界面骨架已就位,启动核心将在 M1 接入。"
+                        FontSize="14"
+                        Opacity="0.75"
+                        Margin="0,6,0,20" />
+                    <StackPanel Orientation="Horizontal">
+                        <Button
+                            Content="启动游戏"
+                            Style="{StaticResource BrandPrimaryButton}"
+                            IsEnabled="False" />
+                        <Button
+                            Content="下载游戏"
+                            Margin="12,0,0,0"
+                            IsEnabled="False" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <UniformGrid Columns="3" Margin="0,16,0,0">
+                <Border Style="{StaticResource BrandCard}" Margin="0,0,8,0">
+                    <StackPanel>
+                        <ui:SymbolIcon Symbol="ArrowDownload24" FontSize="22" Foreground="{StaticResource BrandPrimaryBrush}" />
+                        <TextBlock Text="版本下载" FontSize="16" FontWeight="SemiBold" Margin="0,10,0,4" />
+                        <TextBlock Text="官方源 + BMCLAPI 镜像双通道,占位待 M1。" Opacity="0.7" TextWrapping="Wrap" />
+                    </StackPanel>
+                </Border>
+                <Border Style="{StaticResource BrandCard}" Margin="8,0">
+                    <StackPanel>
+                        <ui:SymbolIcon Symbol="PersonAccounts24" FontSize="22" Foreground="{StaticResource BrandPrimaryBrush}" />
+                        <TextBlock Text="多登录方式" FontSize="16" FontWeight="SemiBold" Margin="0,10,0,4" />
+                        <TextBlock Text="正版 / 离线 / 外置登录,占位待 M2。" Opacity="0.7" TextWrapping="Wrap" />
+                    </StackPanel>
+                </Border>
+                <Border Style="{StaticResource BrandCard}" Margin="8,0,0,0">
+                    <StackPanel>
+                        <ui:SymbolIcon Symbol="PuzzlePiece24" FontSize="22" Foreground="{StaticResource BrandPrimaryBrush}" />
+                        <TextBlock Text="资源市场" FontSize="16" FontWeight="SemiBold" Margin="0,10,0,4" />
+                        <TextBlock Text="Modrinth 优先接入,占位待 M4。" Opacity="0.7" TextWrapping="Wrap" />
+                    </StackPanel>
+                </Border>
+            </UniformGrid>
+        </StackPanel>
+    </ScrollViewer>
+</Page>
