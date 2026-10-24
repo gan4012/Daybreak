@@ -6,6 +6,7 @@
 
     <Page.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
+        <app:InverseBooleanConverter x:Key="InverseBool" xmlns:app="clr-namespace:Daybreak.Launcher" />
     </Page.Resources>
 
     <ScrollViewer VerticalScrollBarVisibility="Auto">
@@ -14,20 +15,171 @@
             <!-- 账号 -->
             <Border Style="{StaticResource GlassCard}">
                 <StackPanel>
-                    <StackPanel Orientation="Horizontal">
-                        <ui:SymbolIcon Symbol="PersonAccounts24" FontSize="20" Foreground="{StaticResource BrandAccentBrush}" />
-                        <TextBlock Text="账号" FontSize="15" FontWeight="SemiBold" Margin="8,0,0,0" VerticalAlignment="Center" />
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Orientation="Horizontal">
+                            <ui:SymbolIcon Symbol="PersonAccounts24" FontSize="20" Foreground="{StaticResource BrandAccentBrush}" />
+                            <TextBlock Text="账号" FontSize="15" FontWeight="SemiBold" Margin="8,0,0,0" VerticalAlignment="Center" />
+                            <TextBlock
+                                Text="{Binding Auth.ActiveAccountDisplay}"
+                                FontSize="13"
+                                Opacity="0.85"
+                                Margin="12,0,0,0"
+                                VerticalAlignment="Center" />
+                        </StackPanel>
+                        <ComboBox
+                            Grid.Column="1"
+                            SelectedIndex="{Binding Auth.SelectedModeIndex}"
+                            MinWidth="130"
+                            MinHeight="32">
+                            <ComboBoxItem Content="离线登录" />
+                            <ComboBoxItem Content="微软正版" />
+                            <ComboBoxItem Content="外置登录" />
+                        </ComboBox>
+                    </Grid>
+
+                    <!-- 离线登录 -->
+                    <StackPanel Margin="0,12,0,0">
+                        <StackPanel.Style>
+                            <Style TargetType="StackPanel">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding Auth.SelectedModeIndex}" Value="0">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </StackPanel.Style>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <ui:TextBox
+                                Text="{Binding Auth.PlayerName, UpdateSourceTrigger=PropertyChanged}"
+                                MaxLength="16"
+                                PlaceholderText="玩家名(离线模式,仅供单机与测试)" />
+                            <Button
+                                Grid.Column="1"
+                                Command="{Binding Auth.AddOfflineAccountCommand}"
+                                Content="保存账号"
+                                Margin="12,0,0,0"
+                                MinHeight="34" />
+                        </Grid>
                     </StackPanel>
-                    <ui:TextBox
-                        Text="{Binding PlayerName, UpdateSourceTrigger=PropertyChanged}"
-                        MaxLength="16"
-                        PlaceholderText="玩家名(离线模式)"
-                        Margin="0,12,0,0" />
+
+                    <!-- 微软正版 -->
+                    <StackPanel Margin="0,12,0,0">
+                        <StackPanel.Style>
+                            <Style TargetType="StackPanel">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding Auth.SelectedModeIndex}" Value="1">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </StackPanel.Style>
+                        <StackPanel Orientation="Horizontal">
+                            <Button
+                                Command="{Binding Auth.MicrosoftLoginCommand}"
+                                Content="登录微软正版(设备码)"
+                                MinHeight="34"
+                                IsEnabled="{Binding Auth.IsAuthBusy, Converter={StaticResource InverseBool}}" />
+                            <Button
+                                Command="{Binding Auth.OpenDeviceCodeUrlCommand}"
+                                Content="打开授权页面"
+                                Margin="12,0,0,0"
+                                MinHeight="34"
+                                Visibility="{Binding Auth.DeviceCodeVisible, Converter={StaticResource BoolToVisibility}}" />
+                        </StackPanel>
+                        <Border
+                            CornerRadius="10"
+                            Background="#14FFFFFF"
+                            Padding="14,10"
+                            Margin="0,10,0,0"
+                            Visibility="{Binding Auth.DeviceCodeVisible, Converter={StaticResource BoolToVisibility}}">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="验证码:" FontSize="13" VerticalAlignment="Center" Opacity="0.8" />
+                                <TextBlock
+                                    Text="{Binding Auth.DeviceCodeText}"
+                                    FontSize="20"
+                                    FontWeight="Bold"
+                                    FontFamily="Consolas"
+                                    Foreground="{StaticResource BrandAccentBrush}"
+                                    Margin="10,0,0,0"
+                                    VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+
+                    <!-- 外置登录 -->
+                    <StackPanel Margin="0,12,0,0">
+                        <StackPanel.Style>
+                            <Style TargetType="StackPanel">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding Auth.SelectedModeIndex}" Value="2">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </StackPanel.Style>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <ui:TextBox
+                                Text="{Binding Auth.ExternalServerUrl, UpdateSourceTrigger=PropertyChanged}"
+                                PlaceholderText="服务器地址(如 littleskin.cn)"
+                                Margin="0,0,8,0" />
+                            <ui:TextBox
+                                Grid.Column="1"
+                                Text="{Binding Auth.ExternalUsername, UpdateSourceTrigger=PropertyChanged}"
+                                PlaceholderText="账号"
+                                Margin="0,0,8,0" />
+                            <ui:TextBox
+                                Grid.Column="2"
+                                Text="{Binding Auth.ExternalPassword, UpdateSourceTrigger=PropertyChanged}"
+                                PlaceholderText="密码" />
+                            <Button
+                                Grid.Column="3"
+                                Command="{Binding Auth.ExternalLoginCommand}"
+                                Content="登录"
+                                Margin="12,0,0,0"
+                                MinHeight="34" />
+                        </Grid>
+                    </StackPanel>
+
+                    <!-- 认证状态 + 已保存账号 -->
                     <TextBlock
-                        Text="当前为离线登录,仅供单机与测试;微软正版与外置登录将在 M2 接入。"
-                        Opacity="0.7"
+                        Text="{Binding Auth.AuthStatusText}"
+                        Opacity="0.75"
                         TextWrapping="Wrap"
-                        Margin="0,8,0,0" />
+                        Margin="0,10,0,0" />
+
+                    <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                        <TextBlock Text="已保存账号:" FontSize="12" Opacity="0.7" VerticalAlignment="Center" />
+                        <ComboBox
+                            ItemsSource="{Binding Auth.Accounts}"
+                            SelectedItem="{Binding Auth.SelectedAccount}"
+                            DisplayMemberPath="Name"
+                            MinWidth="200"
+                            MinHeight="30"
+                            Margin="8,0,0,0" />
+                        <Button
+                            Command="{Binding Auth.RemoveAccountCommand}"
+                            CommandParameter="{Binding Auth.SelectedAccount}"
+                            Content="移除"
+                            MinHeight="30"
+                            Margin="8,0,0,0" />
+                    </StackPanel>
                 </StackPanel>
             </Border>
 

@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using CmlLib.Core;
 using CmlLib.Core.Auth;
+using CmlLib.Core.CommandParser;
 using CmlLib.Core.ProcessBuilder;
 using CmlLib.Core.Version;
 using CmlLib.Core.VersionMetadata;
@@ -21,14 +22,24 @@ public class LaunchProgress
         TotalTasks <= 0 ? 0 : (int)((double)ProgressedTasks / TotalTasks * 100);
 }
 
-/// <summary>启动请求参数(从 LauncherConfig 投影)。</summary>
+/// <summary>启动请求参数(从 LauncherConfig 与登录结果投影)。</summary>
 public record LaunchRequest(
     string VersionId,
     string PlayerName,
     string? GameDirectory,
     string Mirror,
     int MaxMemoryMb,
-    string? JavaPath);
+    string? JavaPath)
+{
+    /// <summary>已认证会话;null 时按离线模式使用 PlayerName。</summary>
+    public MSession? Session { get; init; }
+
+    /// <summary>外置登录:authlib-injector.jar 的完整路径(与 AuthServerUrl 一起注入)。</summary>
+    public string? JavaAgentJarPath { get; init; }
+
+    /// <summary>外置登录:Yggdrasil API 根地址。</summary>
+    public string? AuthServerUrl { get; init; }
+}
 
 /// <summary>
 /// 启动核心门面:封装 CmlLib.Core 的版本列表 / 安装 / 启动,镜像切换经 HttpClient 改写实现。
@@ -125,7 +136,7 @@ public class LaunchService
         await launcher.InstallAsync(versionId);
     }
 
-    /// <summary>确保版本文件完整后启动游戏(离线会话)。</summary>
+    /// <summary>确保版本文件完整后启动游戏(离线 / 正版 / 外置会话)。</summary>
     public async Task<Process> LaunchAsync(
         LaunchRequest request,
         IProgress<LaunchProgress>? progress,
@@ -137,10 +148,18 @@ public class LaunchService
 
         var option = new MLaunchOption
         {
-            Session = MSession.CreateOfflineSession(request.PlayerName),
+            Session = request.Session ?? MSession.CreateOfflineSession(request.PlayerName),
             MaximumRamMb = request.MaxMemoryMb,
             JavaPath = string.IsNullOrWhiteSpace(request.JavaPath) ? null : request.JavaPath,
         };
+
+        if (!string.IsNullOrWhiteSpace(request.JavaAgentJarPath) &&
+            !string.IsNullOrWhiteSpace(request.AuthServerUrl))
+        {
+            // authlib-injector:以 javaagent 方式注入外置登录
+            var agentArgument = new MArgument($"-javaagent:{request.JavaAgentJarPath}={request.AuthServerUrl}");
+            option.ExtraJvmArguments = option.ExtraJvmArguments.Append(agentArgument);
+        }
 
         var process = await launcher.InstallAndBuildProcessAsync(request.VersionId, option);
 

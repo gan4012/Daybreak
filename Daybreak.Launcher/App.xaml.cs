@@ -16,6 +16,7 @@ public partial class App : Application
         {
             services.AddSingleton<MainWindowViewModel>();
             services.AddSingleton<SettingsViewModel>();
+            services.AddSingleton<AuthViewModel>();
             services.AddTransient<HomeViewModel>();
             services.AddTransient<DownloadViewModel>();
             services.AddSingleton<MainWindow>();

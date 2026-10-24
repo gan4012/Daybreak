@@ -6,6 +6,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Daybreak.Core.Game;
 using Daybreak.Core.Storage;
+using Daybreak.Launcher.ViewModels;
 using Serilog;
 
 namespace Daybreak.Launcher.ViewModels;
@@ -21,11 +22,10 @@ public partial class HomeViewModel : ObservableObject
 
     public ObservableCollection<string> InstalledVersions { get; } = [];
 
-    [ObservableProperty]
-    private string? _selectedVersion;
+    public AuthViewModel Auth { get; } = App.GetService<AuthViewModel>();
 
     [ObservableProperty]
-    private string _playerName;
+    private string? _selectedVersion;
 
     [ObservableProperty]
     private bool _isBusy;
@@ -40,18 +40,9 @@ public partial class HomeViewModel : ObservableObject
     [ObservableProperty]
     private string _logText = "";
 
-    public bool HasProgress => ProgressPercent > 0;
-
     public HomeViewModel()
     {
-        PlayerName = _config.PlayerName;
         _ = LoadVersionsAsync();
-    }
-
-    partial void OnPlayerNameChanged(string value)
-    {
-        _config.PlayerName = value;
-        _config.Save();
     }
 
     partial void OnIsBusyChanged(bool value)
@@ -114,48 +105,84 @@ public partial class HomeViewModel : ObservableObject
         }
     }
 
-    [RelayCommand(CanExecute = nameof(CanLaunch))]
-    private async Task LaunchAsync()
+    /// <summary>启动前确保有可用的 Java:探测不到时按版本自动下载官方运行时。</summary>
+    private async Task<string?> EnsureJavaAsync(string versionId)
     {
-        if (SelectedVersion is null)
-            return;
-        if (string.IsNullOrWhiteSpace(PlayerName))
-        {
-            StatusText = "请先填写玩家名";
-            return;
-        }
-
         var javaPath = JavaLocator.FindJava(_config.JavaDirectory);
-        if (javaPath is null)
-        {
-            StatusText = "未找到 Java,请在设置页指定 Java 路径(自动下载运行时将在 M2 接入)";
-            Log("[!] 未找到 Java:已检查 JAVA_HOME 与常见安装目录");
-            return;
-        }
+        if (javaPath is not null)
+            return javaPath;
 
-        IsBusy = true;
-        ProgressPercent = 0;
-        StatusText = "正在准备游戏文件…";
-        Log($"—— 启动 {SelectedVersion}(离线:{PlayerName},Java:{javaPath})——");
+        StatusText = "未找到 Java,正在自动下载官方运行时…";
+        Log("[!] 未找到 Java,开始自动下载(可能需要几分钟)");
 
-        // Progress<T> 在 UI 线程创建,回调自动调度回 UI 线程
-        IProgress<LaunchProgress> uiProgress = new Progress<LaunchProgress>(p =>
+        IProgress<LaunchProgress> javaProgress = new Progress<LaunchProgress>(p =>
         {
             if (p.TotalTasks > 0)
                 ProgressPercent = Math.Max(ProgressPercent, p.Percent);
             if (!string.IsNullOrEmpty(p.CurrentFile))
                 Log($"  下载 {p.CurrentFile}");
         });
-        IProgress<string> uiLog = new Progress<string>(AppendLogCore);
-        IProgress<object?> uiExit = new Progress<object?>(_ => OnGameExited());
+
+        var component = await GetService().GetJavaComponentAsync(versionId)
+                        ?? MojangJavaInstaller.DefaultComponent;
+        var installRoot = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Daybreak", "runtime");
+        var runtimeDir = await new MojangJavaInstaller(_config.Mirror)
+            .InstallAsync(installRoot, component, javaProgress);
+
+        _config.JavaDirectory = runtimeDir;
+        _config.Save();
+        Log($"[✓] Java 运行时就绪:{runtimeDir}");
+        return Path.Combine(runtimeDir, "bin", "java.exe");
+    }
+
+    [RelayCommand(CanExecute = nameof(CanLaunch))]
+    private async Task LaunchAsync()
+    {
+        if (SelectedVersion is null)
+            return;
+
+        IsBusy = true;
+        ProgressPercent = 0;
+        Log($"—— 启动 {SelectedVersion} ——");
 
         try
         {
+            var javaPath = await EnsureJavaAsync(SelectedVersion);
+            if (javaPath is null)
+            {
+                StatusText = "Java 自动下载失败,请到「下载 Java」手动获取";
+                return;
+            }
+
+            var auth = await Auth.GetLaunchAuthAsync(text =>
+            {
+                StatusText = text;
+                Log(text);
+            });
+            Log($"[✓] 认证就绪:{Auth.ActiveAccountDisplay}");
+
+            StatusText = "正在准备游戏文件…";
+            IProgress<LaunchProgress> uiProgress = new Progress<LaunchProgress>(p =>
+            {
+                if (p.TotalTasks > 0)
+                    ProgressPercent = Math.Max(ProgressPercent, p.Percent);
+                if (!string.IsNullOrEmpty(p.CurrentFile))
+                    Log($"  下载 {p.CurrentFile}");
+            });
+            IProgress<string> uiLog = new Progress<string>(AppendLogCore);
+            IProgress<object?> uiExit = new Progress<object?>(_ => OnGameExited());
+
             _gameProcess = await GetService().LaunchAsync(
                 new LaunchRequest(
-                    SelectedVersion, PlayerName.Trim(),
+                    SelectedVersion, Auth.PlayerName.Trim(),
                     _config.GameDirectory, _config.Mirror,
-                    _config.MaxMemoryMb, javaPath),
+                    _config.MaxMemoryMb, javaPath)
+                {
+                    Session = auth.Session,
+                    JavaAgentJarPath = auth.JavaAgentJar,
+                    AuthServerUrl = auth.AuthServerUrl,
+                },
                 uiProgress,
                 line => uiLog.Report(line),
                 () => uiExit.Report(null!));
@@ -181,9 +208,7 @@ public partial class HomeViewModel : ObservableObject
         _gameProcess = null;
     }
 
-    private void Log(string line) => AppendLogCore(line);
-
-    private void AppendLogCore(string line)
+    private void Log(string line)
     {
         _logBuffer.AppendLine(line);
         if (_logBuffer.Length > 64_000)
@@ -197,4 +222,6 @@ public partial class HomeViewModel : ObservableObject
         }
         LogText = _logBuffer.ToString();
     }
+
+    private void AppendLogCore(string line) => Log(line);
 }

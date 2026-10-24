@@ -11,6 +11,8 @@
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="CmlLib.Core" Version="4.1.0" />
+    <PackageReference Include="CmlLib.Core.Auth.Microsoft" Version="3.4.0" />
+    <PackageReference Include="XboxAuthNet.Game.Msal" Version="0.2.0" />
   </ItemGroup>
 
 </Project>
