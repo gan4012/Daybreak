@@ -28,6 +28,8 @@ public partial class App : Application
 
     public static T GetService<T>() where T : class => AppHost.Services.GetRequiredService<T>();
 
+    public static object GetService(Type serviceType) => AppHost.Services.GetRequiredService(serviceType);
+
     protected override void OnStartup(StartupEventArgs e)
     {
         LogSetup.Initialize();
