@@ -95,14 +95,17 @@ public partial class HomeViewModel : ObservableObject
     [RelayCommand(CanExecute = nameof(CanDownloadJava))]
     private void OpenJavaDownloadSite()
     {
-        // java.com 只有 Java 8;Adoptium 是新版本 MC 需要的 17/21 的免费官方渠道,
-        // 链接已预筛 Windows x64 JRE
-        const string url = "https://adoptium.net/temurin/releases/?os=windows&arch=x64&package=jre";
+        // Adoptium 官网的安装包最终托管在 GitHub Releases,被墙环境点下载会超时;
+        // 清华 TUNA 镜像同步了全部 Temurin 构建,国内直连可达。
+        // 默认打开 Java 21 JRE(覆盖 1.20.5+ 与 1.18+ 大多数版本);需要 17 时把路径里的 21 换成 17。
+        const string url = "https://mirrors.tuna.tsinghua.edu.cn/Adoptium/21/jre/x64/windows/";
+        const string url17 = "https://mirrors.tuna.tsinghua.edu.cn/Adoptium/17/jre/x64/windows/";
         try
         {
             Process.Start(new ProcessStartInfo { FileName = url, UseShellExecute = true });
-            Log($"已打开 Java 下载页:{url}");
-            StatusText = "已打开 Java 官方下载页;安装后如未被自动识别,请在设置页填写 Java 路径";
+            Log($"已打开 Java 下载页(清华镜像):{url}");
+            Log($"旧版本(1.18~1.20.4)需要的 Java 17:{url17}");
+            StatusText = "已打开 Java 下载页(清华镜像);下载 .msi 安装后如未被识别,请在设置页填写 Java 路径";
         }
         catch (Exception ex)
         {

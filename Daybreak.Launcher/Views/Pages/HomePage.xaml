@@ -62,7 +62,7 @@
                             Command="{Binding OpenJavaDownloadSiteCommand}"
                             Icon="{ui:SymbolIcon DrinkCoffee24}"
                             Content="下载 Java"
-                            ToolTip="打开 Java(Adoptium Temurin)官方下载页,含 17 / 21 等新版本"
+                            ToolTip="打开清华镜像的 Java(Adoptium Temurin)下载页,国内直连可下载"
                             Margin="12,0,0,0"
                             MinHeight="36" />
                         <Button
