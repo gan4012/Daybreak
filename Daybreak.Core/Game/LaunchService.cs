@@ -88,16 +88,34 @@ public class LaunchService
     /// <summary>本地已安装版本目录名(存在同名 .json 才算完整)。</summary>
     public IReadOnlyList<string> GetInstalledVersions()
     {
+        return GetInstalledVersionInfos().Select(i => i.Name).ToList();
+    }
+
+    /// <summary>本地已安装版本(含磁盘占用),按名称倒序。</summary>
+    public IReadOnlyList<InstalledVersionInfo> GetInstalledVersionInfos()
+    {
         var versionsDir = Path.Combine(ResolveGameDirectory(), "versions");
         if (!Directory.Exists(versionsDir))
             return [];
 
-        return Directory.EnumerateDirectories(versionsDir)
-            .Select(Path.GetFileName)
-            .Where(n => n is not null && File.Exists(Path.Combine(versionsDir, n, n + ".json")))
-            .Select(n => n!)
-            .OrderByDescending(n => n, StringComparer.OrdinalIgnoreCase)
-            .ToList();
+        var list = new List<InstalledVersionInfo>();
+        foreach (var dir in Directory.EnumerateDirectories(versionsDir))
+        {
+            var name = Path.GetFileName(dir);
+            if (name is null || !File.Exists(Path.Combine(dir, name + ".json")))
+                continue;
+
+            long size = 0;
+            foreach (var file in Directory.EnumerateFiles(dir, "*", SearchOption.AllDirectories))
+            {
+                try { size += new FileInfo(file).Length; }
+                catch (IOException) { /* 文件被占用时跳过该项 */ }
+            }
+
+            list.Add(new InstalledVersionInfo(name, size));
+        }
+
+        return list.OrderByDescending(i => i.Name, StringComparer.OrdinalIgnoreCase).ToList();
     }
 
     public async Task InstallAsync(string versionId, IProgress<LaunchProgress>? progress)
