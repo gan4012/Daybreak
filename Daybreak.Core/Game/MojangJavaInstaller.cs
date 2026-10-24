@@ -59,34 +59,16 @@ public class MojangJavaInstaller
 
         var (files, totalBytes) = await LoadFileListAsync(http, manifestUrl);
 
-        long doneBytes = 0;
-        var doneFiles = 0;
-        var reportLock = new object();
+        // 自研引擎批量下载:多文件并发 + 单文件分片 + SHA1 校验
+        var engine = new DownloadEngine(_mirror);
+        var items = files.Select(f => new DownloadItem(
+            f.Url,
+            Path.Combine(runtimeDir, f.Path.Replace('/', Path.DirectorySeparatorChar)),
+            f.Path,
+            f.Size,
+            f.Sha1));
 
-        foreach (var (relativePath, url, size, sha1, executable) in files)
-        {
-            var targetPath = Path.Combine(runtimeDir, relativePath.Replace('/', Path.DirectorySeparatorChar));
-            Directory.CreateDirectory(Path.GetDirectoryName(targetPath)!);
-
-            if (!File.Exists(targetPath) || new FileInfo(targetPath).Length != size)
-                await DownloadFileAsync(http, url, targetPath);
-
-            VerifySha1(targetPath, sha1, relativePath);
-
-            lock (reportLock)
-            {
-                doneBytes += size;
-                doneFiles++;
-                progress?.Report(new LaunchProgress
-                {
-                    CurrentFile = relativePath,
-                    ProgressedTasks = doneFiles,
-                    TotalTasks = files.Count,
-                    ProgressedBytes = doneBytes,
-                    TotalBytes = totalBytes,
-                });
-            }
-        }
+        await engine.DownloadFilesAsync(http, items, progress);
 
         return runtimeDir;
     }
@@ -159,29 +141,5 @@ public class MojangJavaInstaller
         if (bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF)
             bytes = bytes[3..];
         return JsonDocument.Parse(bytes);
-    }
-
-    private static async Task DownloadFileAsync(HttpClient http, string url, string targetPath)
-    {
-        // 大文件(几十 MB)在国内网络可能超过 HttpClient 默认 100s,单独放宽
-        using var timeoutCts = new CancellationTokenSource(TimeSpan.FromMinutes(15));
-        using var response = await http.GetAsync(
-            url, HttpCompletionOption.ResponseHeadersRead, timeoutCts.Token);
-        response.EnsureSuccessStatusCode();
-
-        await using var source = await response.Content.ReadAsStreamAsync(timeoutCts.Token);
-        await using var target = new FileStream(targetPath, FileMode.Create, FileAccess.Write, FileShare.None, 1 << 20);
-        await source.CopyToAsync(target, 1 << 20, timeoutCts.Token);
-    }
-
-    private static void VerifySha1(string filePath, string? expected, string name)
-    {
-        if (string.IsNullOrEmpty(expected))
-            return;
-
-        using var stream = File.OpenRead(filePath);
-        var actual = Convert.ToHexStringLower(SHA1.HashData(stream));
-        if (actual != expected)
-            throw new InvalidOperationException($"SHA1 校验失败:{name}");
     }
 }

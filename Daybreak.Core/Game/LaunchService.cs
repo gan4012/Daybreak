@@ -2,6 +2,7 @@ using System.Diagnostics;
 using CmlLib.Core;
 using CmlLib.Core.Auth;
 using CmlLib.Core.CommandParser;
+using CmlLib.Core.Installers;
 using CmlLib.Core.ProcessBuilder;
 using CmlLib.Core.Version;
 using CmlLib.Core.VersionMetadata;
@@ -71,7 +72,7 @@ public class LaunchService
         _gameDirectory ?? Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), ".minecraft");
 
-    /// <summary>构建带镜像/重试处理的启动器(供本服务与 LoaderService 共用)。</summary>
+    /// <summary>构建带镜像/重试处理的启动器(供本服务与 LoaderService 共用);下载并发高于默认值。</summary>
     public static MinecraftLauncher CreateLauncher(string? gameDirectory, string mirror)
     {
         var http = new HttpClient(new ResilientHttpHandler(mirror));
@@ -79,6 +80,9 @@ public class LaunchService
             ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), ".minecraft")
             : gameDirectory;
         var parameters = MinecraftLauncherParameters.CreateDefault(new MinecraftPath(resolved), http);
+        var cores = Environment.ProcessorCount;
+        parameters.GameInstaller = new ParallelGameInstaller(
+            Math.Max(4, cores), Math.Max(8, cores * 2), 2048, http);
         return new MinecraftLauncher(parameters);
     }
 

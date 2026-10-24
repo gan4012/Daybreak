@@ -2,6 +2,7 @@ using System.IO;
 using System.Net.Http;
 using System.Security.Cryptography;
 using System.Text.Json;
+using Daybreak.Core.Game;
 
 namespace Daybreak.Core.Auth;
 
@@ -31,8 +32,17 @@ public class AuthlibInjectorDownloader(HttpClient http)
             File.Delete(targetPath);
         }
 
-        var data = await http.GetByteArrayAsync(url);
-        await File.WriteAllBytesAsync(targetPath, data);
+        // BMCLAPI 支持 Range:走自研引擎分片下载;gh-proxy 兜底源不支持断点续传,整体下载
+        if (url.StartsWith("https://bmclapi2.bangbang93.com/", StringComparison.OrdinalIgnoreCase))
+        {
+            var engine = new DownloadEngine(mirror ?? "official");
+            await engine.DownloadFileAsync(http, url, targetPath, cancellationToken: CancellationToken.None);
+        }
+        else
+        {
+            var data = await http.GetByteArrayAsync(url);
+            await File.WriteAllBytesAsync(targetPath, data);
+        }
 
         if (sha256 is not null && ComputeSha256(targetPath) != sha256)
         {
