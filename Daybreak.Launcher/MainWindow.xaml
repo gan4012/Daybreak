@@ -48,6 +48,33 @@
         <!-- 轻暗色罩:压低背景亮度,保证玻璃卡片上的文字对比度,同时保留亚克力透明感 -->
         <Rectangle Fill="#4D101418" IsHitTestVisible="False" />
 
+        <!--
+            悬浮侧边栏玻璃底板:WPF-UI 模板的窗格背景不可定制,
+            因此在导航控件下面自绘一块带投影的圆角玻璃,宽度跟随窗格展开/收起。
+        -->
+        <Border
+            HorizontalAlignment="Left"
+            Margin="10,10,0,10"
+            Padding="0"
+            CornerRadius="18"
+            BorderThickness="1"
+            BorderBrush="{StaticResource GlassRimBrush}"
+            Background="{StaticResource GlassFillBrush}">
+            <Border.Effect>
+                <DropShadowEffect BlurRadius="30" ShadowDepth="8" Direction="270" Opacity="0.42" Color="#000000" />
+            </Border.Effect>
+            <Border.Style>
+                <Style TargetType="Border">
+                    <Setter Property="Width" Value="{Binding OpenPaneLength, ElementName=RootNavigation}" />
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding IsPaneOpen, ElementName=RootNavigation}" Value="False">
+                            <Setter Property="Width" Value="{Binding CompactPaneLength, ElementName=RootNavigation}" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Border.Style>
+        </Border>
+
         <ui:NavigationView
             x:Name="RootNavigation"
             Background="Transparent"
@@ -90,9 +117,19 @@
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
-                    <ui:TitleBar
-                        Grid.Row="0"
-                        Title="{Binding AppTitle}" />
+                    <!--
+                        模板的 Title 文字块垂直对齐与窗口按钮(高30、顶置,中心y=15)错位,
+                        改用自定义 Header 文字块,顶部留白使其中心精确落在 15px。
+                    -->
+                    <ui:TitleBar Grid.Row="0">
+                        <ui:TitleBar.Header>
+                            <TextBlock
+                                Text="{Binding AppTitle}"
+                                FontSize="12"
+                                VerticalAlignment="Top"
+                                Margin="16,7,0,0" />
+                        </ui:TitleBar.Header>
+                    </ui:TitleBar>
                 </Grid>
             </ui:NavigationView.ContentOverlay>
         </ui:NavigationView>
