@@ -1,3 +1,5 @@
+using System.IO;
+using System.Net;
 using System.Net.Http;
 
 namespace Daybreak.Core.Game;
@@ -5,6 +7,10 @@ namespace Daybreak.Core.Game;
 /// <summary>
 /// 韧性下载处理器:GET 请求失败时自动重试,并在镜像与官方源之间降级切换。
 /// 尝试顺序:配置镜像 → 官方源 → 配置镜像(共 3 次)。
+///
+/// 每次尝试有独立限时:连接/TLS 15 秒、响应头 45 秒——拿到响应头后解除限时,
+/// 正文按调用方节奏读取(大文件慢速下载不受影响)。
+/// 这防止首选镜像黑洞(如 BMCLAPI 不可达)时请求永久挂起、重试永不触发。
 /// </summary>
 public class ResilientHttpHandler : DelegatingHandler
 {
@@ -17,10 +23,17 @@ public class ResilientHttpHandler : DelegatingHandler
     ];
 
     public ResilientHttpHandler(string mirror, HttpMessageHandler? innerHandler = null)
-        : base(innerHandler ?? new HttpClientHandler())
+        : base(innerHandler ?? CreateInnerHandler())
     {
         _mirror = mirror;
     }
+
+    private static HttpMessageHandler CreateInnerHandler() => new SocketsHttpHandler
+    {
+        ConnectTimeout = TimeSpan.FromSeconds(15),
+        UseCookies = false,
+        AutomaticDecompression = System.Net.DecompressionMethods.All,
+    };
 
     protected override async Task<HttpResponseMessage> SendAsync(
         HttpRequestMessage request, CancellationToken cancellationToken)
@@ -56,7 +69,7 @@ public class ResilientHttpHandler : DelegatingHandler
         throw new HttpRequestException("下载失败(已尝试镜像与官方源各一次)", lastError);
     }
 
-    private Task<HttpResponseMessage> SendWithModeAsync(
+    private async Task<HttpResponseMessage> SendWithModeAsync(
         HttpRequestMessage request, string mirror, CancellationToken cancellationToken)
     {
         var rewritten = DownloadMirror.Rewrite(request.RequestUri, mirror);
@@ -69,9 +82,21 @@ public class ResilientHttpHandler : DelegatingHandler
             };
             foreach (var header in request.Headers)
                 retry.Headers.TryAddWithoutValidation(header.Key, header.Value);
-            return base.SendAsync(retry, cancellationToken);
+            return await SendBoundedAsync(retry, cancellationToken);
         }
 
-        return base.SendAsync(request, cancellationToken);
+        return await SendBoundedAsync(request, cancellationToken);
+    }
+
+    private async Task<HttpResponseMessage> SendBoundedAsync(
+        HttpRequestMessage request, CancellationToken cancellationToken)
+    {
+        // 限时只约束到"响应头到手";此后解除,正文读取由调用方控制节奏
+        using var headerCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        headerCts.CancelAfter(TimeSpan.FromSeconds(45));
+
+        var response = await base.SendAsync(request, headerCts.Token);
+        headerCts.CancelAfter(Timeout.InfiniteTimeSpan);
+        return response;
     }
 }

@@ -55,6 +55,9 @@ public static partial class CrashAnalyzer
     [GeneratedRegex(@"Failed to verify username|Invalid session|Bad user name or password|Invalid credentials")]
     private static partial Regex SessionInvalid();
 
+    [GeneratedRegex(@"Unrecognized option:|--sun-misc-unsafe-memory-access")]
+    private static partial Regex JvmOptionMismatch();
+
     private static readonly (Func<Regex> Pattern, string Title, string Advice)[] Rules =
     [
         (OldJava, "Java 版本过旧",
@@ -81,6 +84,8 @@ public static partial class CrashAnalyzer
          "无法连接所需服务器。检查网络与代理设置;使用外置登录时确认服务器可访问。"),
         (SessionInvalid, "登录凭据失效",
          "账号令牌已过期或无效。到首页重新登录后再启动。"),
+        (JvmOptionMismatch, "JVM 参数与 Java 版本不匹配",
+         "游戏携带的 JVM 参数未被当前 Java 认识(通常为 Java 过旧)。启动器已自动使用官方运行时;若仍出现,请在设置中清空自定义 Java 路径。"),
     ];
 
     /// <summary>

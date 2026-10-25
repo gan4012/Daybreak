@@ -1,3 +1,4 @@
+using System.Threading.Tasks;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using CmlLib.Core.VersionMetadata;
@@ -255,7 +256,7 @@ public partial class DownloadViewModel : ObservableObject
 
         try
         {
-            await GetService().InstallAsync(item.Name, uiProgress);
+            await Task.Run(() => GetService().InstallAsync(item.Name, _config.VersionIsolation, uiProgress));
             item.IsInstalled = true;
             item.InstallPercent = 100;
             StatusText = $"{item.Name} 安装完成{_statusSuffix}";

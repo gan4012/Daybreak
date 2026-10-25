@@ -17,6 +17,9 @@ public partial class HomeViewModel : ObservableObject
 
     private readonly LauncherConfig _config = LauncherConfig.Load();
     private readonly StringBuilder _logBuffer = new();
+    private readonly object _logLock = new();
+    private bool _logDirty;
+    private readonly System.Windows.Threading.DispatcherTimer _logFlushTimer;
     private LaunchService? _launchService;
     private Process? _gameProcess;
 
@@ -40,8 +43,26 @@ public partial class HomeViewModel : ObservableObject
     [ObservableProperty]
     private string _logText = "";
 
+    private string? _lastProgressFile;
+
     public HomeViewModel()
     {
+        // 日志节流:下载期间每秒可产生数百条文件事件,若每条都重建 LogText
+        // 并触发 TextBox 全量重排 + ScrollToEnd,UI 线程会被文本格式化淹死
+        _logFlushTimer = new System.Windows.Threading.DispatcherTimer
+        {
+            Interval = TimeSpan.FromMilliseconds(300),
+        };
+        _logFlushTimer.Tick += (_, _) =>
+        {
+            if (!_logDirty)
+                return;
+            _logDirty = false;
+            TrimLogBuffer();
+            LogText = _logBuffer.ToString();
+        };
+        _logFlushTimer.Start();
+
         _ = LoadVersionsAsync();
     }
 
@@ -105,16 +126,10 @@ public partial class HomeViewModel : ObservableObject
         }
     }
 
-    /// <summary>启动前确保有可用的 Java:探测不到时按版本自动下载官方运行时。</summary>
+    /// <summary>启动前确保有版本兼容的 Java(探测/校验/自动下载都在 Core 完成)。</summary>
     private async Task<string?> EnsureJavaAsync(string versionId)
     {
-        var javaPath = JavaLocator.FindJava(_config.JavaDirectory);
-        if (javaPath is not null)
-            return javaPath;
-
-        StatusText = "未找到 Java,正在自动下载官方运行时…";
-        Log("[!] 未找到 Java,开始自动下载(可能需要几分钟)");
-
+        StatusText = "正在准备 Java 运行时…";
         IProgress<LaunchProgress> javaProgress = new Progress<LaunchProgress>(p =>
         {
             if (p.TotalTasks > 0)
@@ -124,10 +139,8 @@ public partial class HomeViewModel : ObservableObject
         });
 
         var runtimeDir = await GetService().EnsureJavaAsync(versionId, _config.JavaDirectory, javaProgress);
-        _config.JavaDirectory = Path.GetDirectoryName(
-            Path.GetDirectoryName(runtimeDir ?? string.Empty)) ?? runtimeDir;
-        _config.Save();
-        Log($"[✓] Java 运行时就绪:{runtimeDir}");
+        if (runtimeDir is not null)
+            Log($"[✓] Java 就绪:{runtimeDir}");
         return runtimeDir;
     }
 
@@ -157,18 +170,36 @@ public partial class HomeViewModel : ObservableObject
             });
             Log($"[✓] 认证就绪:{Auth.ActiveAccountDisplay}");
 
-            StatusText = "正在准备游戏文件…";
+            StatusText = "正在准备游戏文件(首次运行需下载资源,可能较久)…";
+            long lastLoggedBytes = 0;
+            var fileEventCount = 0;
             IProgress<LaunchProgress> uiProgress = new Progress<LaunchProgress>(p =>
             {
                 if (p.TotalTasks > 0)
                     ProgressPercent = Math.Max(ProgressPercent, p.Percent);
-                if (!string.IsNullOrEmpty(p.CurrentFile))
-                    Log($"  下载 {p.CurrentFile}");
+
+                // 字节进度节流上状态栏(每 8MB 刷一次,避免刷屏)
+                if (p.TotalBytes > 0 && p.ProgressedBytes - lastLoggedBytes > 8 * 1024 * 1024)
+                {
+                    lastLoggedBytes = p.ProgressedBytes;
+                    StatusText = $"正在下载游戏文件 {p.ProgressedBytes / 1_048_576} MB / {p.TotalBytes / 1_048_576} MB…";
+                }
+
+                // 文件事件只在日志里留抽样(大版本有数千文件,全记会淹掉日志)
+                if (!string.IsNullOrEmpty(p.CurrentFile) && p.CurrentFile != _lastProgressFile)
+                {
+                    _lastProgressFile = p.CurrentFile;
+                    fileEventCount++;
+                    if (fileEventCount % 25 == 1)
+                        Log($"  文件进度 {fileEventCount}: {p.CurrentFile}");
+                }
             });
             IProgress<string> uiLog = new Progress<string>(AppendLogCore);
             IProgress<int> uiExit = new Progress<int>(OnGameExited);
 
-            _gameProcess = await GetService().LaunchAsync(
+            // Task.Run 脱离 UI 线程同步上下文:CmlLib 内部存在同步等待异步的代码,
+            // 在 UI 线程上下文中调用会死锁(表现为"正在准备游戏文件…"卡住)
+            _gameProcess = await Task.Run(async () => await GetService().LaunchAsync(
                 new LaunchRequest(
                     SelectedVersion, Auth.PlayerName.Trim(),
                     _config.GameDirectory, _config.Mirror,
@@ -180,7 +211,7 @@ public partial class HomeViewModel : ObservableObject
                 },
                 uiProgress,
                 line => uiLog.Report(line),
-                () => uiExit.Report(_gameProcess?.ExitCode ?? -1));
+                () => uiExit.Report(_gameProcess?.ExitCode ?? -1)));
             StatusText = "游戏已启动,日志见下方";
             ProgressPercent = 100;
             Log("[✓] 游戏进程已拉起");
@@ -231,9 +262,28 @@ public partial class HomeViewModel : ObservableObject
 
     private void Log(string line)
     {
-        _logBuffer.AppendLine(line);
-        if (_logBuffer.Length > 64_000)
+        lock (_logLock)
         {
+            _logBuffer.AppendLine(line);
+            if (_logBuffer.Length > 128_000)
+            {
+                var text = _logBuffer.ToString();
+                var lines = text.Split('\n');
+                var keep = lines[^MaxLogLines..];
+                _logBuffer.Clear();
+                foreach (var l in keep)
+                    _logBuffer.AppendLine(l.TrimEnd('\r'));
+            }
+            _logDirty = true;
+        }
+    }
+
+    private void TrimLogBuffer()
+    {
+        lock (_logLock)
+        {
+            if (_logBuffer.Length <= 128_000)
+                return;
             var text = _logBuffer.ToString();
             var lines = text.Split('\n');
             var keep = lines[^MaxLogLines..];
@@ -241,7 +291,6 @@ public partial class HomeViewModel : ObservableObject
             foreach (var l in keep)
                 _logBuffer.AppendLine(l.TrimEnd('\r'));
         }
-        LogText = _logBuffer.ToString();
     }
 
     private void AppendLogCore(string line) => Log(line);

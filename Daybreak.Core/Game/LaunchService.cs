@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using System.Diagnostics;
 using CmlLib.Core;
 using CmlLib.Core.Auth;
@@ -75,7 +76,12 @@ public class LaunchService
     /// <summary>构建带镜像/重试处理的启动器(供本服务与 LoaderService 共用);下载并发高于默认值。</summary>
     public static MinecraftLauncher CreateLauncher(string? gameDirectory, string mirror)
     {
-        var http = new HttpClient(new ResilientHttpHandler(mirror));
+        // 超时必须为无限:大资源(数百 MB)的响应体读取可能超过 HttpClient 默认 100s,
+        // 被掐断后安装器会静默挂起;整体节奏由 UI 进度呈现
+        var http = new HttpClient(new ResilientHttpHandler(mirror))
+        {
+            Timeout = Timeout.InfiniteTimeSpan,
+        };
         var resolved = string.IsNullOrWhiteSpace(gameDirectory)
             ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), ".minecraft")
             : gameDirectory;
@@ -142,21 +148,90 @@ public class LaunchService
     }
 
     /// <summary>
-    /// 确保有可用的 Java:探测 JAVA_HOME 与常见目录,找不到时按所选版本
-    /// 自动下载微软官方运行时到 %APPDATA%/Daybreak/runtime。
+    /// 确保有"版本兼容"的 Java。优先级:
+    /// 1) 版本 JSON 声明了 javaVersion 组件 → 使用/下载官方运行时(保证 JVM 参数兼容);
+    /// 2) 无组件信息 → 探测系统 Java 并按大版本校验,不满足时下载匹配运行时。
     /// </summary>
     public async Task<string?> EnsureJavaAsync(
         string versionId, string? configuredJavaDirectory, IProgress<LaunchProgress>? progress)
     {
+        var component = await GetJavaComponentAsync(versionId);
+        if (component is not null)
+        {
+            // 版本声明了组件就认官方运行时:新版本可能带老 JVM 不认识的参数
+            var runtimeRoot = Path.Combine(CreateGamePath().Runtime, "windows-x64");
+            var runtimeDir = await new MojangJavaInstaller(_mirror)
+                .InstallAsync(runtimeRoot, component, progress);
+            return Path.Combine(runtimeDir, "bin", "java.exe");
+        }
+
+        var requiredMajor = await GetJavaMajorVersionAsync(versionId);
         var found = JavaLocator.FindJava(configuredJavaDirectory);
         if (found is not null)
-            return found;
+        {
+            var systemMajor = GetJavaMajor(found);
+            if (systemMajor is null || requiredMajor is null || systemMajor >= requiredMajor)
+                return found;
 
-        var component = await GetJavaComponentAsync(versionId) ?? MojangJavaInstaller.DefaultComponent;
-        var installRoot = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Daybreak", "runtime");
-        var runtimeDir = await new MojangJavaInstaller(_mirror).InstallAsync(installRoot, component, progress);
-        return Path.Combine(runtimeDir, "bin", "java.exe");
+            progress?.Report(new LaunchProgress
+            {
+                CurrentFile = $"系统 Java({systemMajor})低于该版本要求的 Java {requiredMajor},准备官方运行时",
+            });
+        }
+
+        var fallbackComponent = requiredMajor is not null
+            ? MojangJavaInstaller.ResolveComponent(requiredMajor)
+            : MojangJavaInstaller.DefaultComponent;
+
+        var fallbackRoot = Path.Combine(CreateGamePath().Runtime, "windows-x64");
+        var fallbackDir = await new MojangJavaInstaller(_mirror)
+            .InstallAsync(fallbackRoot, fallbackComponent, progress);
+        return Path.Combine(fallbackDir, "bin", "java.exe");
+    }
+
+    /// <summary>版本要求的 Java 主版本(取自版本 JSON 的 javaVersion.majorVersion)。</summary>
+    public async Task<int?> GetJavaMajorVersionAsync(string versionId)
+    {
+        var launcher = CreateLauncher();
+        var version = await launcher.GetVersionAsync(versionId);
+        var javaVersion = version.GetInheritedProperty(v => v.JavaVersion);
+        return int.TryParse(javaVersion?.MajorVersion, out var major) ? major : null;
+    }
+
+    /// <summary>运行 java -version 探测主版本;失败返回 null(未知则不拦截)。</summary>
+    private static int? GetJavaMajor(string javaExe)
+    {
+        try
+        {
+            using var process = new System.Diagnostics.Process
+            {
+                StartInfo = new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = javaExe,
+                    Arguments = "-version",
+                    RedirectStandardError = true,
+                    RedirectStandardOutput = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                },
+            };
+            process.Start();
+            var output = process.StandardError.ReadToEnd();
+            process.WaitForExit(10_000);
+
+            var match = Regex.Match(output, @"version ""(?<v>\d+)(?:\.(?<minor>\d+))?");
+            if (!match.Success)
+                return null;
+
+            var major = int.Parse(match.Groups["v"].Value);
+            if (major == 1 && match.Groups["minor"].Success)
+                major = int.Parse(match.Groups["minor"].Value); // 1.8 → 8
+            return major;
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
+        {
+            return null;
+        }
     }
 
     /// <summary>官方清单全部版本(含快照与历史版本),清单自带最新在前。</summary>
@@ -277,11 +352,15 @@ public class LaunchService
 
         var process = await launcher.InstallAndBuildProcessAsync(request.VersionId, option);
 
-        if (onLog is not null)
-        {
-            process.OutputDataReceived += (_, e) => onLog(e.Data ?? "");
-            process.ErrorDataReceived += (_, e) => onLog(e.Data ?? "");
-        }
+        // 诊断:把实际使用的 Java 路径写进日志(可确认运行时是否匹配)
+        onLog?.Invoke($"[诊断] 实际 Java:{process.StartInfo.FileName}");
+        onLog?.Invoke($"[诊断] JVM 参数:{Truncate(process.StartInfo.Arguments, 300)}");
+
+        // 强制重定向:CmlLib 构建的 Process 默认不重定向输出,游戏秒退时无从诊断
+        process.StartInfo.RedirectStandardOutput = true;
+        process.StartInfo.RedirectStandardError = true;
+        process.StartInfo.UseShellExecute = false;
+
         if (onExit is not null)
         {
             process.EnableRaisingEvents = true;
@@ -289,10 +368,35 @@ public class LaunchService
         }
 
         process.Start();
-        process.BeginOutputReadLine();
-        process.BeginErrorReadLine();
+
+        if (onLog is not null)
+        {
+            // 行式异步读取;进程秒退时流关闭、循环自然结束
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    while (await process.StandardOutput.ReadLineAsync() is { } line)
+                        onLog(line);
+                }
+                catch (Exception ex) when (ex is IOException or InvalidOperationException) { }
+            });
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    while (await process.StandardError.ReadLineAsync() is { } line)
+                        onLog(line);
+                }
+                catch (Exception ex) when (ex is IOException or InvalidOperationException) { }
+            });
+        }
+
         return process;
     }
+
+    private static string Truncate(string value, int max) =>
+        value.Length <= max ? value : value[..max] + "…";
 
     private static void HookProgress(MinecraftLauncher launcher, IProgress<LaunchProgress>? progress)
     {
@@ -305,10 +409,22 @@ public class LaunchService
             ProgressedTasks = e.ProgressedTasks,
             TotalTasks = e.TotalTasks,
         });
-        launcher.ByteProgressChanged += (_, e) => progress.Report(new LaunchProgress
+
+        // 字节进度节流:每 1MB 才上报一次(原始事件每秒可达数千次,
+        // 全量上报会淹没 UI 线程的调度队列)
+        long lastReportedBytes = 0;
+        launcher.ByteProgressChanged += (_, e) =>
         {
-            ProgressedBytes = e.ProgressedBytes,
-            TotalBytes = e.TotalBytes,
-        });
+            if (e.TotalBytes > 0 &&
+                e.ProgressedBytes != e.TotalBytes &&
+                e.ProgressedBytes - lastReportedBytes < 1_048_576)
+                return;
+            lastReportedBytes = e.ProgressedBytes;
+            progress.Report(new LaunchProgress
+            {
+                ProgressedBytes = e.ProgressedBytes,
+                TotalBytes = e.TotalBytes,
+            });
+        };
     }
 }
