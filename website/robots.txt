@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+
+# 静态资源不必抓取
+Disallow: /screenshots/
