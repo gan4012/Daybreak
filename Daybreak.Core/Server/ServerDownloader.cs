@@ -220,7 +220,20 @@ public class ServerDownloader
         ServerInstance instance, string dir,
         IProgress<LaunchProgress>? progress, CancellationToken ct)
     {
-        progress?.Report(new LaunchProgress { CurrentFile = $"解析原版 {instance.GameVersion} 的服务端下载地址…" });
+        await DownloadVanillaServerJarAsync(instance.GameVersion, dir, progress, ct);
+        return "server.jar";
+    }
+
+    /// <summary>
+    /// 下载原版 server.jar。
+    /// 原版自身要用它;Fabric 也需要它——fabric-server-launch.jar 依赖同目录的
+    /// server.jar(见 fabric-server-launcher.properties 的 serverJar 项)来做运行时补丁。
+    /// </summary>
+    private async Task DownloadVanillaServerJarAsync(
+        string gameVersion, string dir,
+        IProgress<LaunchProgress>? progress, CancellationToken ct)
+    {
+        progress?.Report(new LaunchProgress { CurrentFile = $"解析原版 {gameVersion} 的服务端下载地址…" });
 
         using var http = CreateHttp(_mirror);
 
@@ -231,7 +244,7 @@ public class ServerDownloader
         string? metaUrl = null;
         foreach (var v in manifest.RootElement.GetProperty("versions").EnumerateArray())
         {
-            if (v.GetProperty("id").GetString() == instance.GameVersion)
+            if (v.GetProperty("id").GetString() == gameVersion)
             {
                 metaUrl = v.GetProperty("url").GetString();
                 break;
@@ -239,7 +252,7 @@ public class ServerDownloader
         }
 
         if (string.IsNullOrEmpty(metaUrl))
-            throw new InvalidOperationException($"版本清单里找不到 {instance.GameVersion}");
+            throw new InvalidOperationException($"版本清单里找不到 {gameVersion}");
 
         // 2. 取 downloads.server
         var metaJson = await http.GetStringAsync(metaUrl, ct);
@@ -249,7 +262,7 @@ public class ServerDownloader
             !downloads.TryGetProperty("server", out var server))
         {
             throw new InvalidOperationException(
-                $"{instance.GameVersion} 没有官方服务端(过老的版本可能未提供 server.jar)");
+                $"{gameVersion} 没有官方服务端(过老的版本可能未提供 server.jar)");
         }
 
         var url = server.GetProperty("url").GetString()
@@ -261,7 +274,6 @@ public class ServerDownloader
         progress?.Report(new LaunchProgress { CurrentFile = "下载 server.jar…", TotalBytes = size });
 
         await _engine.DownloadFileAsync(http, url, target, size, sha1, ct);
-        return "server.jar";
     }
 
     private async Task<string> InstallFabricAsync(
@@ -293,16 +305,23 @@ public class ServerDownloader
         var target = Path.Combine(dir, "fabric-server-launch.jar");
 
         progress?.Report(new LaunchProgress { CurrentFile = "下载 Fabric 服务端…" });
-        await _engine.DownloadFileAsync(http, url, target, 0, null, ct);
+        // 注意:DownloadEngine 的契约是 null=大小未知、0=已知空文件。
+        // 这里必须传 null,Fabric 没有给出 Content-Length 之外的大小信息;
+        // 传 0 会让它直接落一个 0 字节文件,启动时报 "Invalid or corrupt jarfile"。
+        await _engine.DownloadFileAsync(http, url, target, null, null, ct);
 
         // 4. 记录加载器版本(供 UI 显示)
         instance.LoaderVersion = loaderVersion;
 
-        // 5. 写 fabric-server-launcher.properties:固定服务端 jar 名,避免它去找官方 server.jar 失败
+        // 5. Fabric 的服务端 launcher 需要同目录的原版 server.jar 才能完成运行时补丁,
+        //    不预先下好会在首次启动时报 "server.jar not found"
+        progress?.Report(new LaunchProgress { CurrentFile = "下载 Fabric 依赖的原版服务端…" });
+        await DownloadVanillaServerJarAsync(instance.GameVersion, dir, progress, ct);
+
+        // 6. 写 fabric-server-launcher.properties:明确告诉它用哪个原版 jar
         var propsPath = Path.Combine(dir, "fabric-server-launcher.properties");
         if (!File.Exists(propsPath))
         {
-            // 注意:serverJar 指向原版服务端,首次启动时 Fabric 需要它来生成/补丁
             File.WriteAllText(propsPath,
                 "#Fabric 服务端启动配置" + Environment.NewLine +
                 "serverJar=server.jar" + Environment.NewLine,

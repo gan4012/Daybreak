@@ -60,7 +60,8 @@ public class ForgeServerInstaller
 
             using var http = ServerDownloader.CreateHttp(DownloadMirror.Official);
             var engine = new DownloadEngine(DownloadMirror.Official);
-            await engine.DownloadFileAsync(http, installerUrl, installerPath, 0, null, ct);
+            // 传 null 而不是 0:0 在 DownloadEngine 里表示"已知空文件",会直接落空文件
+            await engine.DownloadFileAsync(http, installerUrl, installerPath, null, null, ct);
         }
 
         progress?.Report(new LaunchProgress { CurrentFile = "执行 Forge 安装器(耗时较长)…" });
