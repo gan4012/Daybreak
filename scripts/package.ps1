@@ -23,6 +23,19 @@ $etDir = Join-Path $root "third_party\easytier"
 $etCore = Join-Path $etDir "easytier-core.exe"
 $etVersion = "v2.6.4"
 
+# ---- 中继节点地址 ----
+# relay.txt 不进 git(仓库是公开的),但打出来的包必须有它,否则联机不可用。
+# 本地开发:文件就在 third_party/easytier/relay.txt
+# CI 环境:没有这个文件,由仓库 Secret 注入环境变量 DAYBREAK_RELAY
+if (-not (Test-Path (Join-Path $etDir "relay.txt")) -and $env:DAYBREAK_RELAY) {
+    New-Item -ItemType Directory -Path $etDir -Force | Out-Null
+    Write-Host "==> 从 DAYBREAK_RELAY 环境变量写入 relay.txt" -ForegroundColor Yellow
+    [System.IO.File]::WriteAllText(
+        (Join-Path $etDir "relay.txt"),
+        "# Daybreak 联机中继节点(由 CI Secret 注入)`r`n$($env:DAYBREAK_RELAY.Trim())`r`n",
+        (New-Object System.Text.UTF8Encoding($false)))
+}
+
 if (-not (Test-Path $etCore)) {
     Write-Host "==> 缺少 EasyTier 组件,自动下载 $etVersion" -ForegroundColor Yellow
     New-Item -ItemType Directory -Path $etDir -Force | Out-Null
@@ -93,7 +106,11 @@ if (Test-Path $etDir) {
     }
     # relay.txt 含自建节点地址,不进 git,但必须进包,否则联机功能用不了
     if (-not (Test-Path (Join-Path $etOut "relay.txt"))) {
-        throw "缺少 third_party\easytier\relay.txt(内容为一行 host:port)。该文件不进 git,需在本地创建后再打包。"
+        throw @"
+缺少中继节点配置 relay.txt(内容为一行 host:port)。
+  本地:在 third_party\easytier\relay.txt 里写一行地址
+  CI  :在仓库 Settings → Secrets and variables → Actions 里加一个名为 DAYBREAK_RELAY 的 Secret
+"@
     }
 } else {
     throw "找不到 $etDir"
