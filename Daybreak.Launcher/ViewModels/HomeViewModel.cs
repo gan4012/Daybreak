@@ -166,7 +166,7 @@ public partial class HomeViewModel : ObservableObject
                     Log($"  下载 {p.CurrentFile}");
             });
             IProgress<string> uiLog = new Progress<string>(AppendLogCore);
-            IProgress<object?> uiExit = new Progress<object?>(_ => OnGameExited());
+            IProgress<int> uiExit = new Progress<int>(OnGameExited);
 
             _gameProcess = await GetService().LaunchAsync(
                 new LaunchRequest(
@@ -180,7 +180,7 @@ public partial class HomeViewModel : ObservableObject
                 },
                 uiProgress,
                 line => uiLog.Report(line),
-                () => uiExit.Report(null!));
+                () => uiExit.Report(_gameProcess?.ExitCode ?? -1));
             StatusText = "游戏已启动,日志见下方";
             ProgressPercent = 100;
             Log("[✓] 游戏进程已拉起");
@@ -196,11 +196,37 @@ public partial class HomeViewModel : ObservableObject
         }
     }
 
-    private void OnGameExited()
+    private void OnGameExited(int exitCode)
     {
-        StatusText = "游戏已退出";
-        Log("[✓] 游戏进程已退出");
         _gameProcess = null;
+
+        if (exitCode == 0)
+        {
+            StatusText = "游戏正常退出";
+            Log("[✓] 游戏正常退出");
+            return;
+        }
+
+        StatusText = $"游戏异常退出(退出码 {exitCode}),正在诊断…";
+        Log($"[!] 游戏异常退出,退出码 {exitCode},开始崩溃诊断");
+
+        var version = SelectedVersion;
+        var gameRoot = GetService().ResolveGameRootForVersion(version!);
+        IProgress<Core.Diagnostics.CrashReport> uiReport =
+            new Progress<Core.Diagnostics.CrashReport>(report =>
+            {
+                if (report.CrashReportPath is not null)
+                    Log($"崩溃报告:{report.CrashReportPath}");
+
+                foreach (var finding in report.Findings)
+                    Log($"【诊断】{finding.Title} —— {finding.Advice}");
+
+                StatusText = report.Findings.Count > 0
+                    ? $"游戏崩溃:{report.Findings[0].Title}(详见日志与下方诊断)"
+                    : $"游戏异常退出(退出码 {exitCode})";
+            });
+
+        _ = Task.Run(() => uiReport.Report(Core.Diagnostics.CrashAnalyzer.Analyze(gameRoot, exitCode)));
     }
 
     private void Log(string line)

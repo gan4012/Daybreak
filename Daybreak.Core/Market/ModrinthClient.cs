@@ -110,38 +110,54 @@ public class ModrinthClient
         var versions = new List<ModrinthVersion>();
 
         foreach (var entry in document.RootElement.EnumerateArray())
-        {
-            var files = new List<ModrinthFile>();
-            if (entry.TryGetProperty("files", out var filesElement))
-            {
-                foreach (var file in filesElement.EnumerateArray())
-                {
-                    files.Add(new ModrinthFile(
-                        file.GetProperty("url").GetString()!,
-                        file.GetProperty("filename").GetString() ?? "",
-                        file.TryGetProperty("size", out var size) ? size.GetInt64() : 0,
-                        file.TryGetProperty("hashes", out var hashes) &&
-                        hashes.TryGetProperty("sha1", out var sha1)
-                            ? sha1.GetString()
-                            : null,
-                        file.TryGetProperty("primary", out var primary) && primary.ValueKind == JsonValueKind.True));
-                }
-            }
-
-            versions.Add(new ModrinthVersion(
-                entry.GetProperty("id").GetString() ?? "",
-                entry.GetProperty("version_number").GetString() ?? "",
-                entry.TryGetProperty("name", out var name) ? name.GetString() ?? "" : "",
-                ParseStringArray(entry, "game_versions"),
-                ParseStringArray(entry, "loaders"),
-                files.ToArray(),
-                entry.TryGetProperty("date_published", out var date) &&
-                DateTimeOffset.TryParse(date.GetString(), out var parsed)
-                    ? parsed
-                    : DateTimeOffset.MinValue));
-        }
+            versions.Add(ParseVersionEntry(entry));
 
         return versions;
+    }
+
+    /// <summary>按文件 SHA1 反查 Modrinth 版本(用于 Mod 更新检查);查不到返回 null。</summary>
+    public async Task<ModrinthVersion?> GetVersionBySha1Async(string sha1)
+    {
+        var url = $"{ApiBase}version_file/{Uri.EscapeDataString(sha1)}?algorithm=sha1";
+        using var response = await _http.GetAsync(url);
+        if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+            return null;
+        response.EnsureSuccessStatusCode();
+
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        return ParseVersionEntry(document.RootElement);
+    }
+
+    private static ModrinthVersion ParseVersionEntry(JsonElement entry)
+    {
+        var files = new List<ModrinthFile>();
+        if (entry.TryGetProperty("files", out var filesElement))
+        {
+            foreach (var file in filesElement.EnumerateArray())
+            {
+                files.Add(new ModrinthFile(
+                    file.GetProperty("url").GetString()!,
+                    file.GetProperty("filename").GetString() ?? "",
+                    file.TryGetProperty("size", out var size) ? size.GetInt64() : 0,
+                    file.TryGetProperty("hashes", out var hashes) &&
+                    hashes.TryGetProperty("sha1", out var sha1)
+                        ? sha1.GetString()
+                        : null,
+                    file.TryGetProperty("primary", out var primary) && primary.ValueKind == JsonValueKind.True));
+            }
+        }
+
+        return new ModrinthVersion(
+            entry.GetProperty("id").GetString() ?? "",
+            entry.GetProperty("version_number").GetString() ?? "",
+            entry.TryGetProperty("name", out var name) ? name.GetString() ?? "" : "",
+            ParseStringArray(entry, "game_versions"),
+            ParseStringArray(entry, "loaders"),
+            files.ToArray(),
+            entry.TryGetProperty("date_published", out var date) &&
+            DateTimeOffset.TryParse(date.GetString(), out var parsed)
+                ? parsed
+                : DateTimeOffset.MinValue);
     }
 
     private static string[] ParseStringArray(JsonElement element, string propertyName)

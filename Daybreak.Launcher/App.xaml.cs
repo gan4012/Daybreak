@@ -19,7 +19,8 @@ public partial class App : Application
             services.AddSingleton<AuthViewModel>();
             services.AddTransient<HomeViewModel>();
             services.AddTransient<DownloadViewModel>();
-            services.AddSingleton<ModsViewModel>();
+            services.AddTransient<VersionsViewModel>();
+            services.AddTransient<ModsViewModel>();
             services.AddSingleton<MainWindow>();
             services.AddTransient<Views.Pages.HomePage>();
             services.AddTransient<Views.Pages.DownloadPage>();

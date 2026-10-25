@@ -203,6 +203,34 @@ public class LaunchService
         return list.OrderByDescending(i => i.Name, StringComparer.OrdinalIgnoreCase).ToList();
     }
 
+    /// <summary>版本内的 Mod 文件清单(仅 *.jar)。</summary>
+    public IReadOnlyList<InstalledVersionInfo> GetMods(string versionId)
+    {
+        var modsDir = ResolveModsDirectory(versionId);
+        if (!Directory.Exists(modsDir))
+            return [];
+
+        return Directory.EnumerateFiles(modsDir, "*.jar")
+            .Select(f => new InstalledVersionInfo(Path.GetFileName(f), new FileInfo(f).Length))
+            .OrderByDescending(i => i.Name, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    /// <summary>删除版本:移除版本目录(json/jar)及其隔离游戏目录(若存在)。不可恢复。</summary>
+    public void DeleteVersion(string versionId)
+    {
+        var shared = CreateGamePath();
+        var versionDir = Path.Combine(shared.Versions, versionId);
+        if (Directory.Exists(versionDir))
+            Directory.Delete(versionDir, recursive: true);
+
+        // 隔离目录与版本目录是同一个位置;非隔离时若存在历史隔离目录也一并清理
+        var isolated = Path.Combine(shared.BasePath, "versions", versionId);
+        if (!string.Equals(isolated, versionDir, StringComparison.OrdinalIgnoreCase) &&
+            Directory.Exists(isolated))
+            Directory.Delete(isolated, recursive: true);
+    }
+
     public async Task InstallAsync(string versionId, IProgress<LaunchProgress>? progress)
     {
         var launcher = CreateLauncher();
