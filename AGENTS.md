@@ -15,11 +15,11 @@
 # 构建(注意 .slnx 新格式)
 dotnet build Daybreak.slnx -c Debug
 
-# 测试(35 项,含 3 个联网集成测试)
+# 测试(43 项:35 离线单元 + 8 联网集成;集成测试带 [Trait("Category","Integration")])
 dotnet test Daybreak.slnx -c Debug --no-build
 
-# 只跑离线快速测试
-dotnet test Daybreak.slnx -c Debug --no-build --filter "FullyQualifiedName~DownloadMirrorTests|FullyQualifiedName~YggdrasilClientTests|FullyQualifiedName~AccountStoreTests|FullyQualifiedName~LauncherConfigTests|FullyQualifiedName~CrashAnalyzerTests|FullyQualifiedName~DownloadEngineTests|FullyQualifiedName~ModrinthClientTests"
+# 只跑离线快速测试(CI 用这个;集成测试会真下载游戏 jar / Java 运行时,约 5 分钟)
+dotnet test Daybreak.slnx -c Debug --no-build --filter "Category!=Integration"
 
 # 实机运行
 cd Daybreak.Launcher/bin/Debug/net10.0-windows && ./Daybreak.Launcher.exe
@@ -131,9 +131,15 @@ Daybreak.slnx(.NET 10 新格式解决方案)
   - Mod 更新检查无持久化 UI 入口(逻辑已在版本管理页,可从资源市场一键触发更佳)
   - CurseForge zip 导入未用真实整合包实测(逻辑同 mrpack,理论可用)
   - Forge/NeoForge 完整安装未实跑(管线与 Fabric 同,风险低)
-  - 微软登录 ClientId 用的是 CmlLib 示例 id,**发布前必须换**(Azure 应用注册用户正在办理)
-  - GitHub 仓库未建(用户办理中),发布 CI 与自更新器依赖它
-- **M5 剩余**:自更新器(独立 exe 从发布源拉版本)、发布 CI、公测打包分发
+  - 微软登录 ClientId 用的是 CmlLib 示例 id,**发布前必须换**(设置页已支持填写自有 ClientId)
+- **M5 进展(2026-10-26 完成)**:
+  - ✅ 仓库已建并推送:`https://github.com/gan4012/Daybreak`(私仓,SSH over 443)
+  - ✅ 发布 CI(`.github/workflows/release.yml`):tag `v*` 触发 → build/test/package → 上传 Release
+  - ✅ 自更新器骨架:`Daybreak.Updater --check / --update`,设置页有「检查更新」按钮
+  - ✅ 微软 ClientId 配置化(设置页可填,留空回退开发期备用 ID)
+  - ✅ CI 测试策略:集成测试打 `[Trait("Category","Integration")]`,CI 用 `--filter "Category!=Integration"` 只跑 35 项离线测试
+  - ⚠️ 环境注意:本机推送走 SSH `ssh.github.com:443`(github.com:22 与 HTTPS+GCM 均不稳),配置在 `~/.ssh/config`
+- **M5 剩余**:首次 Release 实跑验证、公测打包分发、自更新器端到端实测
 
 ## 提交规范
 

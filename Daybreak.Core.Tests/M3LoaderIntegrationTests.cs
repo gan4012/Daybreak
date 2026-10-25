@@ -6,6 +6,7 @@ using Xunit.Abstractions;
 namespace Daybreak.Core.Tests;
 
 /// <summary>M3 加载器安装集成测试(真实网络,临时目录)。</summary>
+[Trait("Category", "Integration")]
 public class M3LoaderIntegrationTests
 {
     private readonly ITestOutputHelper _output;

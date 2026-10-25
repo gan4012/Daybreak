@@ -7,6 +7,7 @@ using Xunit.Abstractions;
 namespace Daybreak.Core.Tests;
 
 /// <summary>M4 资源市场真实网络集成测试:搜 JEI → 装 JEI(fabric)到临时版本目录。</summary>
+[Trait("Category", "Integration")]
 public class M4MarketIntegrationTests
 {
     private readonly ITestOutputHelper _output;

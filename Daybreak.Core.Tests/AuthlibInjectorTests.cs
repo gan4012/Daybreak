@@ -5,6 +5,7 @@ using Xunit.Abstractions;
 namespace Daybreak.Core.Tests;
 
 /// <summary>authlib-injector 运行库下载集成测试(真实网络,体量小)。</summary>
+[Trait("Category", "Integration")]
 public class AuthlibInjectorTests
 {
     private readonly ITestOutputHelper _output;

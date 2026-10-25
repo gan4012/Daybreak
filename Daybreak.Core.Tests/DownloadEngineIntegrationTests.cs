@@ -5,6 +5,7 @@ using Xunit.Abstractions;
 namespace Daybreak.Core.Tests;
 
 /// <summary>下载引擎真实网络集成测试:强制小分片,验证分片路径在真实服务器上可用。</summary>
+[Trait("Category", "Integration")]
 public class DownloadEngineIntegrationTests
 {
     private readonly ITestOutputHelper _output;

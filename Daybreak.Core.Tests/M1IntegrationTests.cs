@@ -8,6 +8,7 @@ namespace Daybreak.Core.Tests;
 /// M1 联网集成测试:走真实网络与 CmlLib 管线。
 /// 使用临时游戏目录,不污染用户 %APPDATA%。
 /// </summary>
+[Trait("Category", "Integration")]
 public class M1IntegrationTests
 {
     private readonly ITestOutputHelper _output;
