@@ -71,7 +71,13 @@ public partial class DownloadViewModel : ObservableObject
     [ObservableProperty]
     private string _downloadedBytesDisplay = "";
 
+    /// <summary>当前下载速度(MB/s,保留一位小数)。</summary>
+    [ObservableProperty]
+    private string _speedDisplay = "";
+
     private string _statusSuffix = "";
+    private long _lastReportedBytes = -1;
+    private DateTime _lastSpeedSampleTime = DateTime.MinValue;
 
     // ===== 加载器安装(M3) =====
 
@@ -222,6 +228,46 @@ public partial class DownloadViewModel : ObservableObject
         _ => $"{bytes / 1_024.0:F0} KB",
     };
 
+    /// <summary>处理进度更新并计算下载速度。</summary>
+    private void HandleProgress(LaunchProgress p, bool isByteBased)
+    {
+        if (p.TotalTasks > 0)
+        {
+            var percent = Math.Max(ProgressPercent, p.Percent);
+            ProgressPercent = percent;
+        }
+
+        CurrentFile = p.CurrentFile;
+
+        if (isByteBased && p.TotalBytes > 0)
+        {
+            DownloadedBytesDisplay =
+                $"{FormatBytes(p.ProgressedBytes)} / {FormatBytes(p.TotalBytes)}";
+
+            // 计算速度:每 1 秒采样一次
+            var now = DateTime.UtcNow;
+            if (_lastReportedBytes >= 0 && _lastSpeedSampleTime != DateTime.MinValue)
+            {
+                var elapsed = (now - _lastSpeedSampleTime).TotalSeconds;
+                if (elapsed >= 1.0)
+                {
+                    var deltaBytes = p.ProgressedBytes - _lastReportedBytes;
+                    var speedMbps = (deltaBytes / elapsed) / (1024.0 * 1024.0);
+                    SpeedDisplay = $"↑{speedMbps:F1} MB/s";
+                }
+            }
+            _lastReportedBytes = p.ProgressedBytes;
+            _lastSpeedSampleTime = now;
+        }
+        else if (!isByteBased)
+        {
+            DownloadedBytesDisplay = "";
+            SpeedDisplay = "";
+            _lastReportedBytes = -1;
+            _lastSpeedSampleTime = DateTime.MinValue;
+        }
+    }
+
     private bool CanInstall() => !IsBusy;
 
     [RelayCommand(CanExecute = nameof(CanInstall))]
@@ -248,10 +294,7 @@ public partial class DownloadViewModel : ObservableObject
                 item.InstallPercent = percent;
                 ProgressPercent = percent;
             }
-            CurrentFile = p.CurrentFile;
-            if (p.TotalBytes > 0)
-                DownloadedBytesDisplay =
-                    $"{FormatBytes(p.ProgressedBytes)} / {FormatBytes(p.TotalBytes)}";
+            HandleProgress(p, isByteBased: true);
         });
 
         try
@@ -343,10 +386,7 @@ public partial class DownloadViewModel : ObservableObject
                 var percent = Math.Max(ProgressPercent, p.Percent);
                 ProgressPercent = percent;
             }
-            CurrentFile = p.CurrentFile;
-            if (p.TotalBytes > 0)
-                DownloadedBytesDisplay =
-                    $"{FormatBytes(p.ProgressedBytes)} / {FormatBytes(p.TotalBytes)}";
+            HandleProgress(p, isByteBased: true);
         });
 
         try

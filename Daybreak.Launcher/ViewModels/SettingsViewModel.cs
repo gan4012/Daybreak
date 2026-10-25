@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.IO;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -11,8 +12,13 @@ public partial class SettingsViewModel : ObservableObject
 {
     private readonly LauncherConfig _config = LauncherConfig.Load();
 
+    /// <summary>主题模式:0=深色,1=浅色,2=跟随系统。</summary>
     [ObservableProperty]
-    private bool _isDarkTheme;
+    private int _selectedThemeIndex;
+
+    /// <summary>背景效果:0=Acrylic,1=Mica,2=None。</summary>
+    [ObservableProperty]
+    private int _selectedBackdropIndex;
 
     [ObservableProperty]
     private string _gameDirectory;
@@ -30,28 +36,98 @@ public partial class SettingsViewModel : ObservableObject
     private bool _versionIsolation;
 
     [ObservableProperty]
+    private string _microsoftClientId = "";
+
+    [ObservableProperty]
+    private string _jvmArguments = "";
+
+    [ObservableProperty]
+    private string _proxyHost = "";
+
+    [ObservableProperty]
+    private int _proxyPort;
+
+    [ObservableProperty]
+    private int _selectedProxyTypeIndex; // 0=HTTP,1=SOCKS5
+
+    [ObservableProperty]
+    private bool _proxyEnabled;
+
+    [ObservableProperty]
     private string _settingsStatusText = "";
 
     public LauncherConfig Config => _config;
 
     public SettingsViewModel()
     {
-        _isDarkTheme = _config.ThemeMode != "Light";
+        // 主题: Dark=0, Light=1, System=2
+        _selectedThemeIndex = _config.ThemeMode switch
+        {
+            "Light" => 1,
+            "System" => 2,
+            _ => 0, // Dark
+        };
+        // 背景效果: Acrylic=0, Mica=1, None=2
+        _selectedBackdropIndex = _config.Backdrop switch
+        {
+            "Mica" => 1,
+            "Tabbed" => 2, // Treat Tabbed as None for simplicity
+            "None" => 2,
+            _ => 0, // Acrylic
+        };
         _gameDirectory = _config.GameDirectory ?? Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), ".minecraft");
         _javaDirectory = _config.JavaDirectory ?? "(自动探测)";
         _maxMemoryMb = _config.MaxMemoryMb;
         _selectedMirrorIndex = _config.Mirror == "bmclapi" ? 1 : 0;
         _versionIsolation = _config.VersionIsolation;
+        _microsoftClientId = _config.MicrosoftClientId ?? "";
+        _jvmArguments = _config.JvmArguments ?? "";
+        _proxyHost = _config.ProxyHost ?? "";
+        _proxyPort = _config.ProxyPort;
+        _selectedProxyTypeIndex = _config.ProxyType == "SOCKS5" ? 1 : 0;
+        _proxyEnabled = !string.IsNullOrWhiteSpace(_config.ProxyHost) && _config.ProxyPort > 0;
     }
 
-    partial void OnIsDarkThemeChanged(bool value)
+    partial void OnSelectedThemeIndexChanged(int value)
     {
-        var theme = value ? "Dark" : "Light";
-        Services.ThemeService.ApplyThemeMode(theme, _config.Backdrop);
+        var theme = value switch
+        {
+            1 => "Light",
+            2 => "System",
+            _ => "Dark", // 0
+        };
+        var backdrop = _selectedBackdropIndex switch
+        {
+            1 => "Mica",
+            2 => "None",
+            _ => "Acrylic",
+        };
+        Services.ThemeService.ApplyThemeMode(theme, backdrop);
         _config.ThemeMode = theme;
+        _config.Backdrop = backdrop;
         _config.Save();
-        Log.Information("主题切换为 {Theme}", theme);
+        Log.Information("主题切换为 {Theme},背景 {Backdrop}", theme, backdrop);
+    }
+
+    partial void OnSelectedBackdropIndexChanged(int value)
+    {
+        var backdrop = value switch
+        {
+            1 => "Mica",
+            2 => "None",
+            _ => "Acrylic",
+        };
+        var theme = _selectedThemeIndex switch
+        {
+            1 => "Light",
+            2 => "System",
+            _ => "Dark",
+        };
+        Services.ThemeService.ApplyThemeMode(theme, backdrop);
+        _config.Backdrop = backdrop;
+        _config.Save();
+        Log.Information("背景效果切换为 {Backdrop}", backdrop);
     }
 
     [RelayCommand]
@@ -110,6 +186,103 @@ public partial class SettingsViewModel : ObservableObject
         SettingsStatusText = $"内存分配已保存为 {MaxMemoryMb} MB";
     }
 
+    [RelayCommand]
+    private void SaveMicrosoftClientId()
+    {
+        var id = MicrosoftClientId.Trim();
+        if (id.Length == 0)
+        {
+            _config.MicrosoftClientId = null;
+            _config.Save();
+            SettingsStatusText = "已清除 ClientId,微软登录将使用开发期备用 ID(发布前请替换)";
+            Log.Information("微软 ClientId 已清除");
+        }
+        else
+        {
+            // 合法 GUID 格式:8-4-4-4-12 十六进制
+            if (!System.Text.RegularExpressions.Regex.IsMatch(id,
+                    @"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"))
+            {
+                SettingsStatusText = "ClientId 格式不正确(应为 GUID,如 xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)";
+                return;
+            }
+
+            _config.MicrosoftClientId = id;
+            _config.Save();
+            SettingsStatusText = "微软 ClientId 已保存(重启启动器后生效)";
+            Log.Information("微软 ClientId 已更新");
+        }
+
+        // 同步更新 AuthViewModel
+        App.GetService<AuthViewModel>().LoadFromConfig();
+    }
+
+    [RelayCommand]
+    private void SaveJvmArguments()
+    {
+        var args = JvmArguments.Trim();
+        if (args.Length == 0)
+        {
+            _config.JvmArguments = null;
+            _config.Save();
+            SettingsStatusText = "已清除自定义 JVM 参数";
+            Log.Information("JVM 参数已清除");
+            return;
+        }
+
+        // 检查是否包含 -Xmx(与内存设置冲突)
+        if (args.Contains("-Xmx", StringComparison.OrdinalIgnoreCase))
+        {
+            SettingsStatusText = "警告:检测到 -Xmx 参数,这与内存设置冲突。建议使用\"游戏内存(MB)\"字段来设置。";
+            // 仍然保存,但给提示
+        }
+
+        _config.JvmArguments = args;
+        _config.Save();
+        SettingsStatusText = "JVM 参数已保存(下次启动生效)";
+        Log.Information("JVM 参数已更新: {Args}", args);
+    }
+
+    [RelayCommand]
+    private void SaveProxy()
+    {
+        var host = ProxyHost.Trim();
+        if (string.IsNullOrEmpty(host) || ProxyPort <= 0)
+        {
+            _config.ProxyHost = null;
+            _config.ProxyPort = 0;
+            _config.Save();
+            SettingsStatusText = "已清除代理设置";
+            Log.Information("代理已清除");
+            return;
+        }
+
+        // 端口范围校验
+        if (ProxyPort is < 1 or > 65535)
+        {
+            SettingsStatusText = "代理端口需在 1 ~ 65535 之间";
+            return;
+        }
+
+        _config.ProxyHost = host;
+        _config.ProxyPort = ProxyPort;
+        _config.ProxyType = _selectedProxyTypeIndex == 1 ? "SOCKS5" : "HTTP";
+        _config.Save();
+        SettingsStatusText = $"代理已保存({_config.ProxyType}://{host}:{ProxyPort},下次下载生效)";
+        Log.Information("代理已更新: {Type}://{Host}:{Port}", _config.ProxyType, host, ProxyPort);
+    }
+
+    partial void OnProxyEnabledChanged(bool value)
+    {
+        // 复选框切换时自动启用/禁用输入框(通过 UI 的 IsEnabled 绑定处理,这里只同步配置)
+        if (!value)
+        {
+            _config.ProxyHost = null;
+            _config.ProxyPort = 0;
+            _config.Save();
+        }
+    }
+
     partial void OnSelectedMirrorIndexChanged(int value)
     {
         _config.Mirror = value == 1 ? "bmclapi" : "official";
@@ -123,4 +296,75 @@ public partial class SettingsViewModel : ObservableObject
         _config.Save();
         Log.Information("版本隔离切换为 {Value}", value);
     }
+
+    [RelayCommand]
+    private async Task CheckForUpdatesAsync()
+    {
+        IsBusy = true;
+        try
+        {
+            var updaterExe = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Daybreak.Updater.exe");
+            if (!File.Exists(updaterExe))
+            {
+                SettingsStatusText = "未找到 Daybreak.Updater.exe,请确保更新器与主程序在同一目录";
+                return;
+            }
+
+            var psi = new ProcessStartInfo
+            {
+                FileName = updaterExe,
+                Arguments = "--check",
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+            };
+
+            using var proc = Process.Start(psi)
+                ?? throw new InvalidOperationException("无法启动更新器");
+            await proc.WaitForExitAsync();
+
+            var output = await proc.StandardOutput.ReadToEndAsync();
+            var error = await proc.StandardError.ReadToEndAsync();
+
+            if (proc.ExitCode == 2 && !string.IsNullOrEmpty(output))
+            {
+                // NEW:<version>:<url>
+                var parts = output.Trim().Split(':');
+                if (parts.Length >= 3)
+                {
+                    var newVersion = parts[1];
+                    var downloadUrl = string.Join(":", parts.Skip(2));
+                    SettingsStatusText = $"发现新版本 {newVersion}! 请访问 GitHub Releases 手动下载更新。";
+                    Log.Information("发现新版本: {Version} ({Url})", newVersion, downloadUrl);
+                }
+                else
+                {
+                    SettingsStatusText = "检测到新版本,但解析结果异常:" + output;
+                }
+            }
+            else if (proc.ExitCode == 0)
+            {
+                SettingsStatusText = "已是最新版本";
+            }
+            else
+            {
+                SettingsStatusText = "检查更新失败:" + (error ?? output);
+                Log.Warning("检查更新失败,退出码:{Code},输出:{Out},错误:{Err}", proc.ExitCode, output, error);
+            }
+        }
+        catch (Exception ex)
+        {
+            SettingsStatusText = "检查更新失败:" + ex.Message;
+            Log.Error(ex, "检查更新异常");
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    /// <summary>是否正在执行操作(用于按钮禁用)。</summary>
+    [ObservableProperty]
+    private bool _isBusy;
 }

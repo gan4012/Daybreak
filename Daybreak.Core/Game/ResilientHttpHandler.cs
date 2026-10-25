@@ -31,12 +31,36 @@ public class ResilientHttpHandler : DelegatingHandler
         _mirror = mirror;
     }
 
-    private static HttpMessageHandler CreateInnerHandler() => new SocketsHttpHandler
+    private static HttpMessageHandler CreateInnerHandler()
     {
-        ConnectTimeout = TimeSpan.FromSeconds(15),
-        UseCookies = false,
-        AutomaticDecompression = System.Net.DecompressionMethods.All,
-    };
+        var config = Core.Storage.LauncherConfig.Load();
+        var hasProxy = !string.IsNullOrWhiteSpace(config.ProxyHost) && config.ProxyPort > 0;
+
+        var sockets = new SocketsHttpHandler
+        {
+            ConnectTimeout = TimeSpan.FromSeconds(15),
+            UseCookies = false,
+            AutomaticDecompression = System.Net.DecompressionMethods.All,
+        };
+
+        if (hasProxy)
+        {
+            var proxy = new System.Net.WebProxy(config.ProxyHost!, config.ProxyPort);
+            if (config.ProxyType == "SOCKS5")
+            {
+                // SOCKS5:WebProxy 默认走 HTTP,需要手动设置 Scheme
+                proxy.Credentials = null;
+                sockets.Proxy = proxy;
+            }
+            else
+            {
+                sockets.Proxy = proxy;
+            }
+            sockets.UseProxy = true;
+        }
+
+        return sockets;
+    }
 
     protected override async Task<HttpResponseMessage> SendAsync(
         HttpRequestMessage request, CancellationToken cancellationToken)

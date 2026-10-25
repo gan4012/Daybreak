@@ -15,13 +15,16 @@ public record LaunchAuth(MSession Session, string? JavaAgentJar, string? AuthSer
 /// <summary>账号卡片的全部状态与命令:离线 / 微软正版(设备码)/ Yggdrasil 外置三种登录与切换。</summary>
 public partial class AuthViewModel : ObservableObject
 {
-    private readonly LauncherConfig _config = LauncherConfig.Load();
+    private LauncherConfig _config = LauncherConfig.Load();
     private readonly AccountStore _store = AccountStore.Load();
-    private readonly MicrosoftAuthenticator _microsoft = new();
+    private MicrosoftAuthenticator _microsoft;
     private readonly YggdrasilClient _yggdrasil = new();
     private bool _syncingSelection;
 
     public ObservableCollection<StoredAccount> Accounts { get; } = [];
+
+    /// <summary>当前微软登录是否使用开发期备用 ClientId(提醒用户替换)。</summary>
+    public bool IsUsingFallbackClientId => _microsoft.IsUsingFallbackClientId;
 
     /// <summary>0 离线 / 1 微软正版 / 2 外置登录。</summary>
     [ObservableProperty]
@@ -60,10 +63,23 @@ public partial class AuthViewModel : ObservableObject
     [ObservableProperty]
     private string _activeAccountDisplay = "未登录";
 
+    /// <summary>当前活动账号的头像 URL(32x32,使用 minotar.net 免费 API)。</summary>
+    [ObservableProperty]
+    private string? _avatarUrl;
+
     public AuthViewModel()
     {
+        _microsoft = new MicrosoftAuthenticator(clientId: _config.MicrosoftClientId);
         PlayerName = _config.PlayerName;
         LoadAccounts();
+    }
+
+    /// <summary>从 LauncherConfig 重新加载 ClientId(由设置页调用,热更新微软登录器)。</summary>
+    public void LoadFromConfig()
+    {
+        _config = LauncherConfig.Load();
+        _microsoft = new MicrosoftAuthenticator(clientId: _config.MicrosoftClientId);
+        OnPropertyChanged(nameof(IsUsingFallbackClientId));
     }
 
     partial void OnPlayerNameChanged(string value)
@@ -102,6 +118,21 @@ public partial class AuthViewModel : ObservableObject
             AccountType.Offline => $"离线 · {active.Name}",
             _ => "未登录",
         };
+
+        // 生成头像 URL:UUID > 玩家名
+        AvatarUrl = active is not null && !string.IsNullOrEmpty(active.Name)
+            ? GetAvatarUrl(active.Name, active.Uuid)
+            : null;
+    }
+
+    /// <summary>获取 minotar.net 头像 URL。</summary>
+    private static string? GetAvatarUrl(string name, string? uuid)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            return null;
+        // 有 UUID 用 UUID(更精确),否则用玩家名
+        var id = !string.IsNullOrWhiteSpace(uuid) ? uuid : name;
+        return $"https://minotar.net/helm/{Uri.EscapeDataString(id)}/32.png";
     }
 
     private bool CanRunAuth() => !IsAuthBusy;

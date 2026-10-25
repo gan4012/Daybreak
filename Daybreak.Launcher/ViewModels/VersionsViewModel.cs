@@ -189,6 +189,132 @@ public partial class VersionsViewModel : ObservableObject
     }
 
     [RelayCommand]
+    private async Task RenameVersionAsync()
+    {
+        if (SelectedVersion is null || IsBusy)
+            return;
+
+        var oldName = SelectedVersion.Name;
+        var newName = ShowInputDialog($"重命名版本\n当前: {oldName}\n\n请输入新版本名:", "重命名版本", oldName);
+
+        if (string.IsNullOrWhiteSpace(newName))
+            return;
+
+        // 清理非法文件名字符
+        foreach (var c in Path.GetInvalidFileNameChars())
+            newName = newName.Replace(c, '_');
+
+        IsBusy = true;
+        try
+        {
+            await Task.Run(() => GetService().RenameVersion(oldName, newName));
+            Log.Information("已重命名版本 {Old} → {New}", oldName, newName);
+            await RefreshAsync();
+            StatusText = $"已重命名为 {newName}";
+        }
+        catch (Exception ex)
+        {
+            StatusText = "重命名失败:" + ex.Message;
+            Log.Error(ex, "重命名版本失败 {Old} → {New}", oldName, newName);
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    [RelayCommand]
+    private async Task CopyVersionAsync()
+    {
+        if (SelectedVersion is null || IsBusy)
+            return;
+
+        var sourceName = SelectedVersion.Name;
+        var defaultName = $"{sourceName}-copy";
+        var newName = ShowInputDialog($"复制版本\n源: {sourceName}\n\n请输入新版本名:", "复制版本", defaultName);
+
+        if (string.IsNullOrWhiteSpace(newName))
+            return;
+
+        foreach (var c in Path.GetInvalidFileNameChars())
+            newName = newName.Replace(c, '_');
+
+        IsBusy = true;
+        try
+        {
+            await Task.Run(() => GetService().CopyVersion(sourceName, newName));
+            Log.Information("已复制版本 {Source} → {Target}", sourceName, newName);
+            await RefreshAsync();
+            StatusText = $"已复制为 {newName}";
+        }
+        catch (Exception ex)
+        {
+            StatusText = "复制失败:" + ex.Message;
+            Log.Error(ex, "复制版本失败 {Source} → {Target}", sourceName, newName);
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    /// <summary>显示一个简单的输入对话框(纯 WPF,无额外依赖)。</summary>
+    private static string? ShowInputDialog(string prompt, string title, string defaultValue)
+    {
+        var window = new System.Windows.Window
+        {
+            Title = title,
+            Width = 420,
+            Height = 160,
+            WindowStartupLocation = System.Windows.WindowStartupLocation.CenterOwner,
+            Owner = App.Current?.MainWindow,
+            ResizeMode = System.Windows.ResizeMode.NoResize,
+        };
+
+        var panel = new System.Windows.Controls.StackPanel { Margin = new System.Windows.Thickness(20) };
+
+        var textBlock = new System.Windows.Controls.TextBlock
+        {
+            Text = prompt,
+            TextWrapping = System.Windows.TextWrapping.Wrap,
+            Margin = new System.Windows.Thickness(0, 0, 0, 10),
+        };
+        panel.Children.Add(textBlock);
+
+        var textBox = new System.Windows.Controls.TextBox
+        {
+            Text = defaultValue,
+            MinHeight = 30,
+            Margin = new System.Windows.Thickness(0, 0, 0, 10),
+        };
+        panel.Children.Add(textBox);
+
+        var grid = new System.Windows.Controls.Grid();
+        grid.ColumnDefinitions.Add(new System.Windows.Controls.ColumnDefinition { Width = System.Windows.GridLength.Auto });
+        grid.ColumnDefinitions.Add(new System.Windows.Controls.ColumnDefinition { Width = System.Windows.GridLength.Auto });
+
+        var okBtn = new System.Windows.Controls.Button { Content = "确定", MinWidth = 70, Margin = new System.Windows.Thickness(0, 0, 5, 0) };
+        var cancelBtn = new System.Windows.Controls.Button { Content = "取消", MinWidth = 70 };
+
+        System.Windows.Controls.Grid.SetColumn(okBtn, 0);
+        System.Windows.Controls.Grid.SetColumn(cancelBtn, 1);
+        grid.Children.Add(okBtn);
+        grid.Children.Add(cancelBtn);
+        panel.Children.Add(grid);
+
+        window.Content = panel;
+
+        string? result = null;
+        bool cancelled = true;
+
+        okBtn.Click += (_, _) => { cancelled = false; result = textBox.Text; window.Close(); };
+        cancelBtn.Click += (_, _) => { cancelled = true; window.Close(); };
+
+        window.ShowDialog();
+        return cancelled ? null : result;
+    }
+
+    [RelayCommand]
     private async Task DeleteModAsync(ModFileInfoItem? mod)
     {
         if (mod is null || SelectedVersion is null)

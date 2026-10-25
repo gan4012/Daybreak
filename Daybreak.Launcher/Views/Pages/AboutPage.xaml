@@ -8,10 +8,11 @@
         <StackPanel MaxWidth="960" Margin="32,28,32,24">
             <TextBlock Text="关于" FontSize="26" FontWeight="SemiBold" />
 
+            <!-- 项目信息 -->
             <Border Style="{StaticResource GlassCard}" Margin="0,16,0,0">
                 <StackPanel>
                     <TextBlock Text="Daybreak 破晓启动器" FontSize="20" FontWeight="Bold" />
-                    <TextBlock Text="版本 0.1.0 (M0)" Opacity="0.7" Margin="0,4,0,12" />
+                    <TextBlock x:Name="VersionText" Text="版本 0.1.0 (M0)" Opacity="0.7" Margin="0,4,0,12" />
                     <TextBlock
                         Text="一个自主品牌的 Minecraft Java 版启动器。本项目与 Mojang 及 Microsoft 无关;Minecraft 是 Mojang Synergies AB 的商标。"
                         Opacity="0.7"
@@ -19,6 +20,7 @@
                 </StackPanel>
             </Border>
 
+            <!-- 开源组件致谢 -->
             <Border Style="{StaticResource GlassCard}" Margin="0,12,0,0">
                 <StackPanel>
                     <TextBlock Text="开源组件致谢" FontSize="15" FontWeight="SemiBold" />
@@ -31,6 +33,32 @@
                         Text="完整第三方许可清单见仓库 THIRD-PARTY-NOTICES.md。"
                         Opacity="0.5"
                         Margin="0,6,0,0" />
+                </StackPanel>
+            </Border>
+
+            <!-- 反馈渠道 -->
+            <Border Style="{StaticResource GlassCard}" Margin="0,12,0,0">
+                <StackPanel>
+                    <TextBlock Text="反馈与联系" FontSize="15" FontWeight="SemiBold" />
+                    <TextBlock
+                        Text="遇到问题或有建议?欢迎提交反馈:"
+                        Opacity="0.7"
+                        Margin="0,6,0,0" />
+                    <Grid Margin="0,8,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="GitHub Issues" Foreground="{StaticResource BrandAccentBrush}" FontSize="13" VerticalAlignment="Center" />
+                        <Button
+                            Grid.Column="1"
+                            Content="打开 GitHub"
+                            MinHeight="30"
+                            Padding="16,6"
+                            Margin="12,0,0,0"
+                            Click="OnOpenGitHub"
+                            Style="{StaticResource BrandPrimaryButton}" />
+                    </Grid>
                 </StackPanel>
             </Border>
         </StackPanel>

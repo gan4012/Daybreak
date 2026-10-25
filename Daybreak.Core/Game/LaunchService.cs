@@ -41,6 +41,9 @@ public record LaunchRequest(
 
     /// <summary>外置登录:Yggdrasil API 根地址。</summary>
     public string? AuthServerUrl { get; init; }
+
+    /// <summary>自定义 JVM 参数(空格分隔,如 -XX:+UseG1GC)。</summary>
+    public string? JvmArguments { get; init; }
 }
 
 /// <summary>加载器类型。</summary>
@@ -306,6 +309,100 @@ public class LaunchService
             Directory.Delete(isolated, recursive: true);
     }
 
+    /// <summary>重命名版本:修改目录名、json 文件名、以及 json 内的 id/jar 字段引用。</summary>
+    public void RenameVersion(string oldName, string newName)
+    {
+        var shared = CreateGamePath();
+        var oldDir = Path.Combine(shared.Versions, oldName);
+        var newDir = Path.Combine(shared.Versions, newName);
+
+        if (!Directory.Exists(oldDir))
+            throw new InvalidOperationException($"版本目录不存在: {oldName}");
+
+        if (Directory.Exists(newDir))
+            throw new InvalidOperationException($"目标版本已存在: {newName}");
+
+        Directory.Move(oldDir, newDir);
+
+        // 更新 json 内的 id 和 jar 字段
+        var jsonPath = Path.Combine(newDir, oldName + ".json");
+        var newPath = Path.Combine(newDir, newName + ".json");
+        if (File.Exists(jsonPath))
+        {
+            var jsonText = File.ReadAllText(jsonPath);
+            using var doc = System.Text.Json.JsonDocument.Parse(jsonText);
+            var options = new System.IO.MemoryStream();
+            using var writer = new System.Text.Json.Utf8JsonWriter(options, new System.Text.Json.JsonWriterOptions { Indented = true });
+            foreach (var prop in doc.RootElement.EnumerateObject())
+            {
+                if (prop.Name == "id")
+                    writer.WriteString("id", newName);
+                else if (prop.Name == "jar" && prop.Value.GetString() == oldName)
+                    writer.WriteString("jar", newName);
+                else
+                    prop.WriteTo(writer);
+            }
+            writer.Flush();
+            File.WriteAllText(newPath, System.Text.Encoding.UTF8.GetString(options.ToArray()));
+            File.Delete(jsonPath);
+        }
+    }
+
+    /// <summary>复制版本:全量复制版本目录到新名字,重写 json id。</summary>
+    public void CopyVersion(string sourceName, string targetName)
+    {
+        var shared = CreateGamePath();
+        var srcDir = Path.Combine(shared.Versions, sourceName);
+        var dstDir = Path.Combine(shared.Versions, targetName);
+
+        if (!Directory.Exists(srcDir))
+            throw new InvalidOperationException($"源版本不存在: {sourceName}");
+
+        if (Directory.Exists(dstDir))
+            throw new InvalidOperationException($"目标版本已存在: {targetName}");
+
+        // 递归复制目录
+        CopyDirectory(srcDir, dstDir);
+
+        // 重写 json 中的 id 和 jar
+        var srcJson = Path.Combine(srcDir, sourceName + ".json");
+        var dstJson = Path.Combine(dstDir, targetName + ".json");
+        if (File.Exists(srcJson))
+        {
+            var jsonText = File.ReadAllText(srcJson);
+            using var doc = System.Text.Json.JsonDocument.Parse(jsonText);
+            var options = new System.IO.MemoryStream();
+            using var writer = new System.Text.Json.Utf8JsonWriter(options, new System.Text.Json.JsonWriterOptions { Indented = true });
+            foreach (var prop in doc.RootElement.EnumerateObject())
+            {
+                if (prop.Name == "id")
+                    writer.WriteString("id", targetName);
+                else if (prop.Name == "jar" && prop.Value.GetString() == sourceName)
+                    writer.WriteString("jar", targetName);
+                else
+                    prop.WriteTo(writer);
+            }
+            writer.Flush();
+            File.WriteAllText(dstJson, System.Text.Encoding.UTF8.GetString(options.ToArray()));
+            File.Delete(srcJson);
+        }
+    }
+
+    private static void CopyDirectory(string source, string destination)
+    {
+        Directory.CreateDirectory(destination);
+        foreach (var file in Directory.EnumerateFiles(source))
+        {
+            var destFile = Path.Combine(destination, Path.GetFileName(file));
+            File.Copy(file, destFile, overwrite: false);
+        }
+        foreach (var dir in Directory.EnumerateDirectories(source))
+        {
+            var destDir = Path.Combine(destination, Path.GetFileName(dir));
+            CopyDirectory(dir, destDir);
+        }
+    }
+
     public async Task InstallAsync(string versionId, IProgress<LaunchProgress>? progress)
     {
         var launcher = CreateLauncher();
@@ -348,6 +445,15 @@ public class LaunchService
             // authlib-injector:以 javaagent 方式注入外置登录
             var agentArgument = new MArgument($"-javaagent:{request.JavaAgentJarPath}={request.AuthServerUrl}");
             option.ExtraJvmArguments = option.ExtraJvmArguments.Append(agentArgument);
+        }
+
+        // 追加用户自定义的 JVM 参数
+        if (!string.IsNullOrWhiteSpace(request.JvmArguments))
+        {
+            foreach (var arg in request.JvmArguments.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+            {
+                option.ExtraJvmArguments = option.ExtraJvmArguments.Append(new MArgument(arg));
+            }
         }
 
         var process = await launcher.InstallAndBuildProcessAsync(request.VersionId, option);

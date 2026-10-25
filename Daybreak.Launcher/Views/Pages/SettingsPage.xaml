@@ -20,12 +20,41 @@
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
                     <StackPanel VerticalAlignment="Center">
-                        <TextBlock Text="深色主题" FontSize="15" FontWeight="SemiBold" />
-                        <TextBlock Text="切换启动器的亮 / 暗外观,即时生效。" Opacity="0.7" Margin="0,2,0,0" />
+                        <TextBlock Text="主题模式" FontSize="15" FontWeight="SemiBold" />
+                        <TextBlock Text="切换启动器的亮 / 暗外观或跟随系统,即时生效。" Opacity="0.7" Margin="0,2,0,0" />
                     </StackPanel>
-                    <ui:ToggleSwitch
+                    <ComboBox
                         Grid.Column="1"
-                        IsChecked="{Binding IsDarkTheme, Mode=TwoWay}" />
+                        SelectedIndex="{Binding SelectedThemeIndex}"
+                        MinWidth="140"
+                        MinHeight="32">
+                        <ComboBoxItem Content="深色" />
+                        <ComboBoxItem Content="浅色" />
+                        <ComboBoxItem Content="跟随系统" />
+                    </ComboBox>
+                </Grid>
+            </Border>
+
+            <!-- 背景效果 -->
+            <Border Style="{StaticResource GlassCard}" Margin="0,12,0,0">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="背景效果" FontSize="15" FontWeight="SemiBold" />
+                        <TextBlock Text="窗口毛玻璃特效:Acrylic(半透明磨砂) / Mica(云母片) / 无特效。" Opacity="0.7" Margin="0,2,0,0" />
+                    </StackPanel>
+                    <ComboBox
+                        Grid.Column="1"
+                        SelectedIndex="{Binding SelectedBackdropIndex}"
+                        MinWidth="140"
+                        MinHeight="32">
+                        <ComboBoxItem Content="Acrylic 磨砂" />
+                        <ComboBoxItem Content="Mica 云母" />
+                        <ComboBoxItem Content="无特效" />
+                    </ComboBox>
                 </Grid>
             </Border>
 
@@ -104,6 +133,56 @@
                 </StackPanel>
             </Border>
 
+            <!-- JVM 参数 -->
+            <Border Style="{StaticResource GlassCard}" Margin="0,12,0,0">
+                <StackPanel>
+                    <TextBlock Text="高级 JVM 参数" FontSize="15" FontWeight="SemiBold" />
+                    <TextBlock
+                        Text="自定义 Java 虚拟机启动参数(空格分隔),如 -XX:+UseG1GC -Dsun.rmi.dgc.server.gcInterval=600000。不要添加 -Xmx(与内存设置冲突)。留空则使用默认参数。"
+                        Opacity="0.7"
+                        TextWrapping="Wrap"
+                        Margin="0,2,0,0" />
+                    <Grid Margin="0,12,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <ui:TextBox Text="{Binding JvmArguments, UpdateSourceTrigger=PropertyChanged}" MinHeight="34" PlaceholderText="-XX:+UseG1GC" />
+                        <Button
+                            Grid.Column="1"
+                            Command="{Binding SaveJvmArgumentsCommand}"
+                            Content="保存"
+                            MinHeight="34"
+                            Margin="12,0,0,0" />
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <!-- 微软登录 ClientId -->
+            <Border Style="{StaticResource GlassCard}" Margin="0,12,0,0">
+                <StackPanel>
+                    <TextBlock Text="微软应用 ClientId" FontSize="15" FontWeight="SemiBold" />
+                    <TextBlock
+                        Text="Azure AD 应用的 ClientId(发布前必须替换为自有应用)。留空则使用开发期备用 ID(有功能限制)。格式:xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                        Opacity="0.7"
+                        TextWrapping="Wrap"
+                        Margin="0,2,0,0" />
+                    <Grid Margin="0,12,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <ui:TextBox Text="{Binding MicrosoftClientId, UpdateSourceTrigger=PropertyChanged}" MinHeight="34" PlaceholderText="粘贴你的 Azure 应用 ClientId" />
+                        <Button
+                            Grid.Column="1"
+                            Command="{Binding SaveMicrosoftClientIdCommand}"
+                            Content="保存"
+                            MinHeight="34"
+                            Margin="12,0,0,0" />
+                    </Grid>
+                </StackPanel>
+            </Border>
+
             <!-- 镜像 + 隔离 -->
             <Border Style="{StaticResource GlassCard}" Margin="0,12,0,0">
                 <StackPanel>
@@ -139,6 +218,78 @@
                             Grid.Column="1"
                             IsChecked="{Binding VersionIsolation, Mode=TwoWay}" />
                     </Grid>
+                </StackPanel>
+            </Border>
+
+            <!-- 更新 -->
+            <Border Style="{StaticResource GlassCard}" Margin="0,12,0,0">
+                <StackPanel>
+                    <TextBlock Text="更新" FontSize="15" FontWeight="SemiBold" />
+                    <TextBlock
+                        Text="检查是否有新版本可用。需要 GitHub Releases 仓库已配置。"
+                        Opacity="0.7"
+                        TextWrapping="Wrap"
+                        Margin="0,2,0,0" />
+                    <Button
+                        Command="{Binding CheckForUpdatesCommand}"
+                        Content="检查更新"
+                        MinHeight="34"
+                        Margin="0,12,0,0"
+                        HorizontalAlignment="Left"
+                        Style="{StaticResource BrandPrimaryButton}" />
+                </StackPanel>
+            </Border>
+
+            <!-- 网络代理 -->
+            <Border Style="{StaticResource GlassCard}" Margin="0,12,0,0">
+                <StackPanel>
+                    <TextBlock Text="网络代理" FontSize="15" FontWeight="SemiBold" />
+                    <TextBlock
+                        Text="校园网/企业网环境可能需要。仅影响启动器下载(版本、Mod、Java)。留空表示不使用代理。"
+                        Opacity="0.7"
+                        TextWrapping="Wrap"
+                        Margin="0,2,0,0" />
+                    <Grid Margin="0,12,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <ui:ToggleSwitch
+                            Grid.Column="0"
+                            IsChecked="{Binding ProxyEnabled, Mode=TwoWay}"
+                            Margin="0,0,16,0" />
+                        <ui:TextBox
+                            Grid.Column="1"
+                            Text="{Binding ProxyHost, UpdateSourceTrigger=PropertyChanged}"
+                            MinHeight="34"
+                            PlaceholderText="代理地址(如 127.0.0.1)"
+                            IsEnabled="{Binding ProxyEnabled}" />
+                        <ui:TextBox
+                            Grid.Column="2"
+                            Text="{Binding ProxyPort, UpdateSourceTrigger=PropertyChanged}"
+                            MinWidth="80"
+                            MinHeight="34"
+                            Margin="8,0,0,0"
+                            PlaceholderText="端口"
+                            IsEnabled="{Binding ProxyEnabled}" />
+                    </Grid>
+                    <ComboBox
+                        SelectedIndex="{Binding SelectedProxyTypeIndex}"
+                        MinWidth="120"
+                        MinHeight="32"
+                        Margin="0,8,0,0"
+                        IsEnabled="{Binding ProxyEnabled}">
+                        <ComboBoxItem Content="HTTP" />
+                        <ComboBoxItem Content="SOCKS5" />
+                    </ComboBox>
+                    <Button
+                        Command="{Binding SaveProxyCommand}"
+                        Content="保存代理"
+                        MinHeight="34"
+                        Margin="0,12,0,0"
+                        HorizontalAlignment="Left"
+                        Style="{StaticResource BrandPrimaryButton}" />
                 </StackPanel>
             </Border>
 

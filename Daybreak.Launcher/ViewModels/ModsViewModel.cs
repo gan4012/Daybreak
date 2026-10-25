@@ -73,7 +73,13 @@ public partial class ModsViewModel : ObservableObject
     [ObservableProperty]
     private string _downloadedBytesDisplay = "";
 
+    /// <summary>当前下载速度(MB/s,保留一位小数)。</summary>
+    [ObservableProperty]
+    private string _speedDisplay = "";
+
     private bool _versionsLoaded;
+    private long _lastReportedBytes = -1;
+    private DateTime _lastSpeedSampleTime = DateTime.MinValue;
 
     public ModsViewModel() => _ = LoadVersionsAsync();
 
@@ -161,6 +167,21 @@ public partial class ModsViewModel : ObservableObject
             {
                 var percent = (int)Math.Clamp(p.ProgressedBytes * 100.0 / p.TotalBytes, 0, 100);
                 ProgressPercent = Math.Max(ProgressPercent, percent);
+
+                // 计算速度:每 1 秒采样一次
+                var now = DateTime.UtcNow;
+                if (_lastReportedBytes >= 0 && _lastSpeedSampleTime != DateTime.MinValue)
+                {
+                    var elapsed = (now - _lastSpeedSampleTime).TotalSeconds;
+                    if (elapsed >= 1.0)
+                    {
+                        var deltaBytes = p.ProgressedBytes - _lastReportedBytes;
+                        var speedMbps = (deltaBytes / elapsed) / (1024.0 * 1024.0);
+                        SpeedDisplay = $"↑{speedMbps:F1} MB/s";
+                    }
+                }
+                _lastReportedBytes = p.ProgressedBytes;
+                _lastSpeedSampleTime = now;
             }
             else if (p.TotalTasks > 0)
             {
@@ -271,11 +292,31 @@ public partial class ModsViewModel : ObservableObject
                 var percent = (int)Math.Clamp(p.ProgressedBytes * 100.0 / p.TotalBytes, 0, 100);
                 item.InstallPercent = Math.Max(item.InstallPercent, percent);
                 ProgressPercent = percent;
-            }
-            CurrentFile = p.CurrentFile;
-            if (p.TotalBytes > 0)
+
                 DownloadedBytesDisplay =
                     $"{FormatBytes(p.ProgressedBytes)} / {FormatBytes(p.TotalBytes)}";
+
+                // 计算速度:每 1 秒采样一次
+                var now = DateTime.UtcNow;
+                if (_lastReportedBytes >= 0 && _lastSpeedSampleTime != DateTime.MinValue)
+                {
+                    var elapsed = (now - _lastSpeedSampleTime).TotalSeconds;
+                    if (elapsed >= 1.0)
+                    {
+                        var deltaBytes = p.ProgressedBytes - _lastReportedBytes;
+                        var speedMbps = (deltaBytes / elapsed) / (1024.0 * 1024.0);
+                        SpeedDisplay = $"↑{speedMbps:F1} MB/s";
+                    }
+                }
+                _lastReportedBytes = p.ProgressedBytes;
+                _lastSpeedSampleTime = now;
+            }
+            else if (p.TotalTasks > 0)
+            {
+                ProgressPercent = Math.Max(ProgressPercent,
+                    (int)(p.ProgressedTasks * 100.0 / p.TotalTasks));
+            }
+            CurrentFile = p.CurrentFile;
         });
 
         try

@@ -18,20 +18,33 @@ public record DeviceCodeInfo(string UserCode, string VerificationUrl, DateTime E
 public class MicrosoftAuthenticator
 {
     /// <summary>
-    /// Azure 应用 ClientId。设备码流程要求该应用开启公共客户端流。
-    /// TODO 发布前注册自主品牌应用并替换;开发期暂用 CmlLib 示例应用的 ClientId。
+    /// 开发期备用 ClientId(CmlLib 示例应用)。发布前应通过配置注入自有应用 ClientId。
     /// </summary>
-    public const string DefaultClientId = "499c8d36-be2a-4231-9ebd-ef291b7bb64c";
+    public const string FallbackClientId = "499c8d36-be2a-4231-9ebd-ef291b7bb64c";
 
     private readonly string _clientId;
     private readonly string _accountStorePath;
+    private readonly bool _isFallback;
 
     public MicrosoftAuthenticator(string? accountStorePath = null, string? clientId = null)
     {
         _accountStorePath = accountStorePath
             ?? Path.Combine(AccountStore.DefaultDirectory, "msauth-accounts.json");
-        _clientId = string.IsNullOrWhiteSpace(clientId) ? DefaultClientId : clientId;
+
+        if (string.IsNullOrWhiteSpace(clientId))
+        {
+            _clientId = FallbackClientId;
+            _isFallback = true;
+        }
+        else
+        {
+            _clientId = clientId;
+            _isFallback = false;
+        }
     }
+
+    /// <summary>当前使用的 ClientId 是否为开发期备用(提醒用户替换)。</summary>
+    public bool IsUsingFallbackClientId => _isFallback;
 
     private JELoginHandler BuildLoginHandler() =>
         new JELoginHandlerBuilder()

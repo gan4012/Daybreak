@@ -270,6 +270,14 @@
                     Opacity="0.7"
                     TextWrapping="Wrap"
                     Margin="0,8,0,0" />
+                <TextBlock
+                    Text="{Binding SpeedDisplay}"
+                    FontSize="12"
+                    FontWeight="SemiBold"
+                    Foreground="{StaticResource BrandAccentBrush}"
+                    Opacity="0.9"
+                    Margin="0,4,0,0"
+                    Visibility="{Binding SpeedDisplay, Converter={StaticResource BoolToVisibility}}" />
             </StackPanel>
         </Border>
     </Grid>

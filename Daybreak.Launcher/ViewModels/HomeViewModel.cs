@@ -208,6 +208,7 @@ public partial class HomeViewModel : ObservableObject
                     Session = auth.Session,
                     JavaAgentJarPath = auth.JavaAgentJar,
                     AuthServerUrl = auth.AuthServerUrl,
+                    JvmArguments = _config.JvmArguments,
                 },
                 uiProgress,
                 line => uiLog.Report(line),

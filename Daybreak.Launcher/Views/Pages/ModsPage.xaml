@@ -175,6 +175,14 @@
                 TextTrimming="CharacterEllipsis"
                 Margin="0,6,0,0"
                 Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibility}, Mode=OneWay}" />
+            <TextBlock
+                Text="{Binding SpeedDisplay}"
+                FontSize="12"
+                FontWeight="SemiBold"
+                Foreground="{StaticResource BrandAccentBrush}"
+                Opacity="0.9"
+                Margin="0,4,0,0"
+                Visibility="{Binding SpeedDisplay, Converter={StaticResource BoolToVisibility}}" />
         </StackPanel>
     </Grid>
 </Page>

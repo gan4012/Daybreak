@@ -22,6 +22,36 @@
                         </Grid.ColumnDefinitions>
                         <StackPanel Orientation="Horizontal">
                             <ui:SymbolIcon Symbol="PersonAccounts24" FontSize="20" Foreground="{StaticResource BrandAccentBrush}" />
+                            <!-- 头像 -->
+                            <Border
+                                CornerRadius="6"
+                                Width="32"
+                                Height="32"
+                                Margin="8,0,0,0"
+                                VerticalAlignment="Center"
+                                Background="#14FFFFFF">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding Auth.AvatarUrl}" Value="{x:Null}">
+                                                <Setter Property="Visibility" Value="Visible" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                            </Border>
+                            <Image
+                                Source="{Binding Auth.AvatarUrl}"
+                                Width="32"
+                                Height="32"
+                                Margin="8,0,0,0"
+                                VerticalAlignment="Center"
+                                Stretch="UniformToFill">
+                                <Image.Clip>
+                                    <RectangleGeometry Rect="0,0,32,32" RadiusX="6" RadiusY="6" />
+                                </Image.Clip>
+                            </Image>
                             <TextBlock Text="账号" FontSize="15" FontWeight="SemiBold" Margin="8,0,0,0" VerticalAlignment="Center" />
                             <TextBlock
                                 Text="{Binding Auth.ActiveAccountDisplay}"
