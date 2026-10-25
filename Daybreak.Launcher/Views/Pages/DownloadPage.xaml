@@ -139,7 +139,7 @@
                                     Padding="6,1"
                                     Margin="6,0,0,0"
                                     VerticalAlignment="Center"
-                                    Visibility="{Binding IsInstalled, Converter={StaticResource BoolToVisibility}}">
+                                    Visibility="{Binding ShowInstalledBadge, Converter={StaticResource BoolToVisibility}}">
                                     <TextBlock Text="已安装" FontSize="11" Foreground="#FFC64D" />
                                 </Border>
                             </StackPanel>
@@ -163,15 +163,20 @@
                             <Button.Style>
                                 <Style TargetType="Button" BasedOn="{StaticResource BrandPrimaryButton}">
                                     <Setter Property="Content" Value="安装" />
+                                    <!--
+                                        先判 IsInstalling:安装中优先显示进度,不能被 IsInstalled 覆盖。
+                                        之前两个 DataTrigger 都在,同时为 true 时会冲突,
+                                        表现为"上面显示已安装、下面还在下载"。
+                                    -->
                                     <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsInstalling}" Value="True">
+                                            <Setter Property="Content" Value="{Binding ButtonText}" />
+                                            <Setter Property="IsEnabled" Value="False" />
+                                        </DataTrigger>
                                         <DataTrigger Binding="{Binding IsInstalled}" Value="True">
                                             <Setter Property="Content" Value="已安装" />
                                             <Setter Property="IsEnabled" Value="False" />
                                             <Setter Property="Opacity" Value="0.6" />
-                                        </DataTrigger>
-                                        <DataTrigger Binding="{Binding IsInstalling}" Value="True">
-                                            <Setter Property="Content" Value="下载中…" />
-                                            <Setter Property="IsEnabled" Value="False" />
                                         </DataTrigger>
                                     </Style.Triggers>
                                 </Style>
@@ -203,6 +208,24 @@
                             Opacity="0.9"
                             Margin="10,0,0,0"
                             VerticalAlignment="Center" />
+                        <!-- 已用时:安装过程中每秒刷新,让用户确认它确实在跑 -->
+                        <TextBlock
+                            FontSize="12"
+                            Opacity="0.6"
+                            Margin="10,0,0,0"
+                            VerticalAlignment="Center"
+                            Text="{Binding InstallElapsedDisplay}">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsBusy}" Value="True">
+                                            <Setter Property="Visibility" Value="Visible" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
                     </StackPanel>
                     <TextBlock
                         Grid.Column="1"

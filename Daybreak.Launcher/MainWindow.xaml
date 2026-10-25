@@ -273,12 +273,51 @@
 
                         <!-- 弹性空白(行高 *) -->
 
+                        <!-- 后台下载提示:任何页面都能看到,避免用户以为下载被切页面中断了 -->
+                        <Border
+                            Grid.Row="4"
+                            CornerRadius="8"
+                            Background="#1FF2A16E"
+                            Padding="10,8"
+                            Margin="0,0,0,8">
+                            <Border.Style>
+                                <Style TargetType="Border">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding Download.HasBackgroundInstall}" Value="True">
+                                            <Setter Property="Visibility" Value="Visible" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
+                            <StackPanel>
+                                <StackPanel Orientation="Horizontal">
+                                    <ui:SymbolIcon Symbol="ArrowDownload24" FontSize="14"
+                                                   Foreground="{StaticResource BrandAccentBrush}" />
+                                    <TextBlock Text="后台下载中" FontSize="12" FontWeight="SemiBold"
+                                               Margin="6,0,0,0" VerticalAlignment="Center" />
+                                </StackPanel>
+                                <TextBlock FontSize="11" Opacity="0.8" Margin="0,4,0,0"
+                                           TextTrimming="CharacterEllipsis">
+                                    <Run Text="{Binding Download.BackgroundInstallName, Mode=OneWay}" />
+                                    <Run Text=" · " />
+                                    <Run Text="{Binding Download.ProgressPercent, Mode=OneWay}" /><Run Text="%" />
+                                </TextBlock>
+                                <ProgressBar
+                                    Height="4"
+                                    Margin="0,6,0,0"
+                                    Maximum="100"
+                                    Value="{Binding Download.ProgressPercent, Mode=OneWay}" />
+                            </StackPanel>
+                        </Border>
+
                         <!-- 分隔线:与 item 同宽(面板内边距内),不通栏 -->
                         <Rectangle
                             Grid.Row="4"
                             Height="1"
                             Fill="#14FFFFFF"
-                            Margin="0,8" />
+                            Margin="0,8"
+                            VerticalAlignment="Bottom" />
 
                         <!-- 底部导航 2 项 -->
                         <ListBox

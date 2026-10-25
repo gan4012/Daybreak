@@ -287,6 +287,67 @@ public class LaunchService
         return list.OrderByDescending(i => i.Name, StringComparer.OrdinalIgnoreCase).ToList();
     }
 
+    /// <summary>
+    /// 判断某版本是否**真正装完**(不只是目录存在)。
+    ///
+    /// 为什么需要它:安装过程中 CmlLib 会**很早就写入版本 JSON**,
+    /// 所以"目录里有 json"不代表装好了——此刻资源/库可能还在下。
+    /// 若用它判断"已安装",列表会一边显示「已安装」一边还在下载(实测踩过)。
+    ///
+    /// 检查项:
+    /// 1. 版本 JSON 存在
+    /// 2. 客户端 jar 存在(加载器版本可继承父版本,沿 inheritsFrom 链找)
+    /// 3. **没有 .part 残留**(有残留说明上次下载没完成)
+    /// </summary>
+    public bool IsVersionComplete(string versionName, int depth = 0)
+    {
+        if (depth > 5 || string.IsNullOrWhiteSpace(versionName))
+            return false;
+
+        var versionsDir = Path.Combine(ResolveGameDirectory(), "versions");
+        var dir = Path.Combine(versionsDir, versionName);
+        var jsonPath = Path.Combine(dir, versionName + ".json");
+
+        if (!File.Exists(jsonPath))
+            return false;
+
+        // 有 .part 说明上次下载中断,不视为完整
+        try
+        {
+            if (Directory.EnumerateFiles(dir, "*.part", SearchOption.TopDirectoryOnly).Any())
+                return false;
+        }
+        catch (IOException)
+        {
+            // 读不了目录就别卡在这,继续后面的检查
+        }
+
+        string? inheritsFrom = null;
+        string? jarField = null;
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(File.ReadAllText(jsonPath));
+            if (doc.RootElement.TryGetProperty("inheritsFrom", out var inh) &&
+                inh.ValueKind == System.Text.Json.JsonValueKind.String)
+                inheritsFrom = inh.GetString();
+            if (doc.RootElement.TryGetProperty("jar", out var jar) &&
+                jar.ValueKind == System.Text.Json.JsonValueKind.String)
+                jarField = jar.GetString();
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+
+        // 本目录有 jar 就算齐
+        var candidate = Path.Combine(dir, (jarField ?? versionName) + ".jar");
+        if (File.Exists(candidate) || File.Exists(Path.Combine(dir, versionName + ".jar")))
+            return true;
+
+        // 否则沿继承链检查父版本(加载器版本是这种形态)
+        return inheritsFrom is not null && IsVersionComplete(inheritsFrom, depth + 1);
+    }
+
     /// <summary>版本内的 Mod 文件清单(仅 *.jar)。</summary>
     public IReadOnlyList<InstalledVersionInfo> GetMods(string versionId)
     {

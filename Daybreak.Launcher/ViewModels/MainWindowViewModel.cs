@@ -52,4 +52,10 @@ public partial class MainWindowViewModel : ObservableObject
 
     [RelayCommand]
     private void ToggleNav() => IsNavCollapsed = !IsNavCollapsed;
+
+    /// <summary>
+    /// 下载页的 VM(单例)。主窗口订阅它的"后台安装中"状态,
+    /// 这样用户切到任何页面都能看到"下载还在跑",不会以为被中断了。
+    /// </summary>
+    public DownloadViewModel Download { get; } = App.GetService<DownloadViewModel>();
 }

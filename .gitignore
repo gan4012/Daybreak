@@ -11,3 +11,8 @@ publish-beta/
 
 trim-test/
 updater-tmp/
+
+# 实机验证产物(截图、测试结果),不属于源码
+app.png
+TestResults/
+*.trx

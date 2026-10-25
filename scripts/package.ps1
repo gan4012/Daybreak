@@ -95,3 +95,27 @@ Compress-Archive -Path (Join-Path $outDir "*") -DestinationPath $zipPath
 
 $size = [math]::Round((Get-Item $zipPath).Length / 1MB, 1)
 Write-Host "==> 完成: $zipName ($size MB)" -ForegroundColor Green
+
+# ---- 同步到干净的发行目录 ----
+# 源码目录里 bin/obj/publish/zip 混在一起很难找"能双击的那个 exe"。
+# 这里把发行文件额外同步一份到 $ReleaseDir,桌面快捷方式指向那里,
+# 用户日常只需要认这一个目录。
+$releaseDir = "D:\Daybreak"
+
+Write-Host "==> 同步发行目录 $releaseDir" -ForegroundColor Cyan
+New-Item -ItemType Directory -Path $releaseDir -Force | Out-Null
+
+# 只放运行需要的:主程序、更新器、说明。不带 pdb,避免用户困惑
+foreach ($name in @("Daybreak.Launcher.exe", "Daybreak.Updater.exe", "使用说明.txt")) {
+    $src = Join-Path $outDir $name
+    if (Test-Path $src) {
+        Copy-Item $src $releaseDir -Force
+    }
+}
+
+# 清掉发行目录里的陈旧 pdb(以前复制过的话)
+Get-ChildItem $releaseDir -Filter "*.pdb" -ErrorAction SilentlyContinue | Remove-Item -Force
+
+$relSize = [math]::Round(((Get-ChildItem $releaseDir -File | Measure-Object Length -Sum).Sum / 1MB), 1)
+Write-Host "==> 发行目录已更新: $releaseDir ($relSize MB)" -ForegroundColor Green
+Write-Host "    可直接双击: $releaseDir\Daybreak.Launcher.exe"
