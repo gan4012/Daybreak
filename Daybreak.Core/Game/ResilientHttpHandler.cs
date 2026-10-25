@@ -22,6 +22,9 @@ public class ResilientHttpHandler : DelegatingHandler
         TimeSpan.FromSeconds(2),
     ];
 
+    /// <summary>镜像健康记忆:最近一次成功的镜像,进程内全局共享,避免反复撞死镜像。</summary>
+    private static volatile string? _lastGoodMirror;
+
     public ResilientHttpHandler(string mirror, HttpMessageHandler? innerHandler = null)
         : base(innerHandler ?? CreateInnerHandler())
     {
@@ -46,8 +49,13 @@ public class ResilientHttpHandler : DelegatingHandler
         Exception? lastError = null;
         for (var attempt = 0; attempt < 3; attempt++)
         {
-            // 降级顺序:配置镜像 → 官方 → 配置镜像
-            var mode = attempt == 1 ? DownloadMirror.Official : _mirror;
+            // 降级顺序:上次成功的镜像 → 配置镜像 → 官方(健康记忆避免反复撞死镜像)
+            var mode = attempt switch
+            {
+                0 => _lastGoodMirror ?? _mirror,
+                1 => _mirror == DownloadMirror.Official ? DownloadMirror.Bmclapi : DownloadMirror.Official,
+                _ => _mirror,
+            };
             if (Backoff[attempt] > TimeSpan.Zero)
             {
                 try { await Task.Delay(Backoff[attempt], cancellationToken); }
@@ -56,7 +64,9 @@ public class ResilientHttpHandler : DelegatingHandler
 
             try
             {
-                return await SendWithModeAsync(request, mode, cancellationToken);
+                var response = await SendWithModeAsync(request, mode, cancellationToken);
+                _lastGoodMirror = mode;
+                return response;
             }
             catch (Exception ex) when (
                 ex is HttpRequestException or TaskCanceledException &&
