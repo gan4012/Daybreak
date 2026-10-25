@@ -34,6 +34,11 @@ internal static class Program
     [STAThread]
     private static Task<int> Main(string[] args)
     {
+        // 任何命令都先清理上次更新留下的 .old 文件。
+        // 更新器替换自身时会把运行中的 exe 重命名为 .old(Windows 不允许直接覆盖运行中的文件),
+        // 若只在 --update 里清理,用户跑完更新后再不更新就会一直留着这个 11MB 孤儿文件。
+        CleanupStaleFilesNextToSelf();
+
         var command = args.Length > 0 ? args[0].Trim().ToLowerInvariant() : string.Empty;
 
         return command switch
@@ -42,6 +47,21 @@ internal static class Program
             "--update" => ApplyUpdate(args.Skip(1).ToArray()),
             _ => ShowHelp(),
         };
+    }
+
+    /// <summary>清理更新器所在目录里的 .old 残留(失败不影响命令执行)。</summary>
+    private static void CleanupStaleFilesNextToSelf()
+    {
+        try
+        {
+            var exeDir = Path.GetDirectoryName(Process.GetCurrentProcess().MainModule?.FileName!);
+            if (!string.IsNullOrEmpty(exeDir))
+                CleanupStaleFiles(exeDir);
+        }
+        catch
+        {
+            // 拿不到路径就跳过,不影响主流程
+        }
     }
 
     /// <summary>显示帮助信息并返回非零退出码。</summary>
