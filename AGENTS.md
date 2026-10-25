@@ -119,6 +119,13 @@ Daybreak.slnx(.NET 10 新格式解决方案)
   集成测试一律用 official;cfwidget.com 免 key 可用但首次查询有 3~10s 排队
 - **文档陷阱**:CmlLib 的 ProcessWrapper(StartWithEvents)只在 MLauncher 路径;
   InstallAndBuildProcessAsync 返回裸 System.Diagnostics.Process(无 OutputReceived 事件)
+- **GitHub Release 资产名不能含非 ASCII**:上传时中文会被替换成 `.`
+  (实测 `Daybreak-内测包-win-x64.zip` → `Daybreak-.-win-x64.zip`)。发布包名必须全 ASCII,
+  否则自更新器按文件名匹配资产会失败。当前包名:`Daybreak-beta-win-x64.zip`。
+- **GCM 浏览器授权在国内常超时**:`git push` 走 HTTPS + Git Credential Manager 会报
+  `发送请求时出错 / 基础连接已经关闭`,并退回索要密码(GitHub 已不支持密码推送)。
+  已改用 SSH,且 `/etc` 级配置写在 `~/.ssh/config`:
+  `Host github.com → HostName ssh.github.com / Port 443 / IdentityFile ~/.ssh/id_ed25519_daybreak`。
 
 ## 实机验证工作流
 
@@ -142,13 +149,15 @@ Daybreak.slnx(.NET 10 新格式解决方案)
   - Forge/NeoForge 完整安装未实跑(管线与 Fabric 同,风险低)
   - 微软登录 ClientId 用的是 CmlLib 示例 id,**发布前必须换**(设置页已支持填写自有 ClientId)
 - **M5 进展(2026-10-26 完成)**:
-  - ✅ 仓库已建并推送:`https://github.com/gan4012/Daybreak`(私仓,SSH over 443)
-  - ✅ 发布 CI(`.github/workflows/release.yml`):tag `v*` 触发 → build/test/package → 上传 Release
-  - ✅ 自更新器骨架:`Daybreak.Updater --check / --update`,设置页有「检查更新」按钮
+  - ✅ 仓库:`https://github.com/gan4012/Daybreak`(**已公开**,SSH over 443 推送)
+  - ✅ 发布 CI(`.github/workflows/release.yml`):tag `v*` 触发 → build/test/package → 上传 Release。
+    已实测跑通:CI 5 次全绿、Release 1 次全绿(约 3.5 分钟)
+  - ✅ 首个 Release:`v0.1.0`(包名损坏,已作废)→ `v0.1.1`(包名 `Daybreak-beta-win-x64.zip`)
+  - ✅ 自更新器:`Daybreak.Updater --check / --update`,设置页有「检查更新」按钮;裁剪后 11.5MB
   - ✅ 微软 ClientId 配置化(设置页可填,留空回退开发期备用 ID)
   - ✅ CI 测试策略:集成测试打 `[Trait("Category","Integration")]`,CI 用 `--filter "Category!=Integration"` 只跑 35 项离线测试
   - ⚠️ 环境注意:本机推送走 SSH `ssh.github.com:443`(github.com:22 与 HTTPS+GCM 均不稳),配置在 `~/.ssh/config`
-- **M5 剩余**:首次 Release 实跑验证、公测打包分发、自更新器端到端实测
+- **M5 剩余**:自更新器 `--update` 端到端实测(覆盖安装+重启)、公测分发与反馈迭代
 
 ## 提交规范
 
