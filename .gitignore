@@ -25,3 +25,7 @@ third_party/easytier/*.sys
 
 # 中继节点地址:不进 git,避免公开仓库里公示自建服务器
 third_party/easytier/relay.txt
+
+# 官网:部署脚本里的服务器地址与本地审阅产物都不进 git
+website/deploy/server.txt
+website/_preview/

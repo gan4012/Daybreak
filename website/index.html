@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Daybreak 破晓启动器 — 自己写的 Minecraft 启动器</title>
+<meta name="description" content="Daybreak 破晓启动器：自主实现的 Minecraft Java 版启动器。三合一登录、四种服务端一键开服、好友联机（6 位房间号，不需要公网 IP）、Mod 生态与崩溃诊断。仅 Windows，免费开源。">
+<meta name="theme-color" content="#0E1220">
+<meta property="og:title" content="Daybreak 破晓启动器">
+<meta property="og:description" content="装游戏、开服、和好友联机，都在一个窗口里完成。">
+<meta property="og:type" content="website">
+<link rel="icon" href="assets/logo.svg" type="image/svg+xml">
+<link rel="preload" href="assets/font/smiley-sans-subset.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+
+<header class="nav" id="nav">
+  <div class="nav-inner">
+    <a href="#" class="brand">
+      <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true">
+        <defs>
+          <linearGradient id="bm" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#FFD9A0"/>
+            <stop offset="0.6" stop-color="#FF8A3D"/>
+            <stop offset="1" stop-color="#F4517F"/>
+          </linearGradient>
+        </defs>
+        <path d="M2 22h28" stroke="url(#bm)" stroke-width="1.5" stroke-linecap="round" opacity=".55"/>
+        <path d="M16 24a8 8 0 0 1 0-16" fill="none" stroke="url(#bm)" stroke-width="2.5" stroke-linecap="round"/>
+        <path d="M16 8a8 8 0 0 1 0 16" fill="url(#bm)"/>
+      </svg>
+      <span class="brand-text">Daybreak <em>破晓启动器</em></span>
+    </a>
+    <nav class="nav-links">
+      <a href="#capabilities">能做什么</a>
+      <a href="#multiplayer">联机</a>
+      <a href="#download">下载</a>
+      <a href="#faq">常见问题</a>
+      <a href="https://github.com/gan4012/Daybreak" target="_blank" rel="noopener" class="nav-github">源码</a>
+    </nav>
+  </div>
+</header>
+
+<section class="hero">
+  <div class="hero-sky"></div>
+  <div class="hero-sun"></div>
+  <div class="hero-horizon"></div>
+  <div class="hero-ground"></div>
+
+  <div class="hero-inner">
+    <div class="hero-text">
+      <h1>天亮了<br>该开始了</h1>
+      <p class="hero-sub">
+        Daybreak 是一个自己写的 Minecraft Java 版启动器。
+        装游戏、开服、和好友联机，都在同一个窗口里完成。
+      </p>
+      <div class="hero-actions">
+        <a href="#download" class="btn btn-primary">下载</a>
+        <a href="#multiplayer" class="btn btn-ghost">联机是怎么做的</a>
+      </div>
+    </div>
+
+    <div class="hero-shot">
+      <img src="screenshots/home.png" width="1280" height="820"
+           alt="Daybreak 启动器主界面：左侧导航，右侧账号与启动面板">
+    </div>
+  </div>
+</section>
+
+<section class="section" id="capabilities">
+  <div class="wrap">
+    <h2 class="section-title">能做什么</h2>
+    <p class="section-sub">从装游戏到联机，一个启动器全包了。下面是它每天在干的活。</p>
+
+    <div class="capabilities">
+      <div class="cap">
+        <h3>三种账号，一处登录</h3>
+        <p>
+          离线登录用于单机和测试。<strong>微软正版</strong>走 MSAL 设备码授权，令牌自动续期，不用反复登录。
+          外置登录支持 Yggdrasil 服务器（比如 LittleSkin），会自己把 authlib-injector 注入进去。
+        </p>
+      </div>
+
+      <div class="cap">
+        <h3>自己写的下载引擎</h3>
+        <p>
+          Range 分片并发下载、SHA1 校验、镜像自动降级。官方源和 BMCLAPI 双源可切，
+          哪边慢就换哪边，不用你手动点。
+        </p>
+      </div>
+
+      <div class="cap">
+        <h3>Mod 从装到更新</h3>
+        <p>
+          Fabric / Forge / NeoForge 加载器一键安装。Modrinth 市场里能按游戏版本和加载器筛，
+          搜到就能装。整合包支持 <code>.mrpack</code> 和 CurseForge 的 zip（不用 API key）。
+          已装的 Mod 会检查更新，能一键升级。
+        </p>
+      </div>
+
+      <div class="cap">
+        <h3>崩了能看懂</h3>
+        <p>
+          游戏闪退时，扫 <code>crash-reports</code> 和 <code>latest.log</code>，
+          用 12 条规则翻成具体建议，不用再对着堆栈一行行猜。
+        </p>
+      </div>
+
+      <div class="cap">
+        <h3>版本互不污染</h3>
+        <p>
+          每个版本有自己的存档、配置和 mods 目录，只有 libraries 和 assets 共享。
+          换版本、装整合包都不会把原来的东西搞乱。
+        </p>
+      </div>
+
+      <div class="cap">
+        <h3>界面按你的习惯来</h3>
+        <p>
+          深色、浅色还是跟随系统，Acrylic 还是 Mica，都能选。
+          JVM 参数、内存分配、HTTP 或 SOCKS5 代理也都能自己填。
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section mp" id="multiplayer">
+  <div class="wrap">
+    <h2 class="section-title">开服和联机</h2>
+    <p class="section-sub">
+      不用公网 IP，也不用在路由器上折腾端口映射。顺序就是下面这三步。
+    </p>
+
+    <div class="mp-steps">
+      <div class="mp-step">
+        <div class="mp-num">01</div>
+        <h3>开一个服务端</h3>
+        <p>选版本和类型，点一下就开始下载并启动。</p>
+        <ul>
+          <li>Vanilla、Fabric、Paper、Forge</li>
+          <li>server.properties 可视化编辑，注释会保留</li>
+          <li>控制台能直接发 op、list 这些命令</li>
+          <li>停服用 stop 命令，世界会正常落盘</li>
+        </ul>
+      </div>
+
+      <div class="mp-step">
+        <div class="mp-num">02</div>
+        <h3>建房间，把号发给好友</h3>
+        <p>点「创建房间」会生成一个 6 位数字房间号。</p>
+        <ul>
+          <li>基于 P2P 虚拟组网，会先尝试直连打洞</li>
+          <li>打不通才走中继，所以跨网络也能连</li>
+          <li>房间里能看到状态和已经进来几个人</li>
+        </ul>
+      </div>
+
+      <div class="mp-step">
+        <div class="mp-num">03</div>
+        <h3>进服</h3>
+        <p>好友输入房间号加入，然后双方点「启动游戏并进服」。</p>
+        <ul>
+          <li>启动时会自动带上服务器地址和端口</li>
+          <li>不用在游戏里手动输入 IP</li>
+          <li>房间里会显示当前版本，方便对版本</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="mp-shot">
+      <img src="screenshots/multiplayer.png" width="1280" height="820" loading="lazy"
+           alt="好友联机界面：选择游戏版本，输入 6 位房间号或创建房间">
+    </div>
+
+    <p class="note">
+      联机要创建虚拟网卡，所以需要管理员权限。启动器平时不需要管理员，
+      只有在点「创建房间」或「加入房间」时才提示你重启一次；不需要联机就完全不受影响。
+      另外，双方的游戏版本和 Mod 必须完全一致，这是 Minecraft 本身的限制。
+    </p>
+  </div>
+</section>
+
+<section class="section" id="download">
+  <div class="wrap wrap-narrow">
+    <h2 class="section-title">下载</h2>
+    <p class="download-meta">
+      当前版本 <span id="dlVersion">v0.1.2</span>，约 <span id="dlSize">96.6 MB</span>，Windows 64 位。
+    </p>
+
+    <div class="dl-list">
+      <a class="dl dl-primary" id="dlNetdisk" href="#" aria-disabled="true">
+        <span>
+          <span class="dl-name">网盘下载</span>
+          <span class="dl-desc">速度稳定，国内直连，推荐</span>
+        </span>
+        <span class="dl-tag" id="dlNetdiskTag">即将上线</span>
+      </a>
+
+      <a class="dl" href="https://gitee.com/wergansailikebai/daybreak/releases" target="_blank" rel="noopener">
+        <span>
+          <span class="dl-name">Gitee 发行版</span>
+          <span class="dl-desc">国内直连，不用代理，实测约 1.5 MB/s</span>
+        </span>
+        <span class="dl-tag">可用</span>
+      </a>
+
+      <a class="dl" href="https://github.com/gan4012/Daybreak/releases" target="_blank" rel="noopener">
+        <span>
+          <span class="dl-name">GitHub Releases</span>
+          <span class="dl-desc">海外或者已经有代理时用</span>
+        </span>
+        <span class="dl-tag dim">需要能访问 GitHub</span>
+      </a>
+    </div>
+
+    <div class="dl-steps">
+      <h3>装起来只有四步</h3>
+      <ol>
+        <li>下载 <code>Daybreak-beta-win-x64.zip</code></li>
+        <li>解压到任意目录。目录里的 <code>easytier</code> 文件夹别删，那是联机组件</li>
+        <li>双击 <code>Daybreak.Launcher.exe</code></li>
+        <li>首次启动会自动下载匹配的 Java 运行时和游戏资源，几百 MB，看版本</li>
+      </ol>
+      <p class="note">
+        自包含单文件，不用另外装 .NET 运行时。
+      </p>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="faq">
+  <div class="wrap wrap-narrow">
+    <h2 class="section-title">常见问题</h2>
+
+    <details class="faq">
+      <summary>这是什么？和 PCL2、HMCL 有什么关系？</summary>
+      <p>
+        Daybreak 是一个独立开发的 Minecraft Java 版启动器，代码、界面、品牌都是自己写的，
+        没有参考或复制任何闭源启动器的代码。功能定位相似，但实现和界面完全不同。
+      </p>
+    </details>
+
+    <details class="faq">
+      <summary>必须买正版吗？</summary>
+      <p>
+        单机可以用离线登录。联机（包括好友联机和自己开的服）建议用正版账号，很多服务器会校验。
+      </p>
+    </details>
+
+    <details class="faq">
+      <summary>好友联机为什么需要管理员权限？</summary>
+      <p>
+        联机要在你的电脑上创建一块虚拟网卡，这必须管理员权限。启动器平时不需要管理员，
+        只有点「创建房间」或「加入房间」时才提示你重启一次。点「否」就不提权，
+        其它功能照常使用。
+      </p>
+    </details>
+
+    <details class="faq">
+      <summary>房间号会不会被人猜到？</summary>
+      <p>
+        6 位数字大约 90 万种组合，相当于一个弱密码。请只告诉自己人，直播或录屏时注意遮挡。
+        玩完记得点「结束联机」。
+      </p>
+    </details>
+
+    <details class="faq">
+      <summary>为什么和好友连不上？</summary>
+      <p>
+        最常见的原因是两边版本不一致。游戏版本、Mod 的版本和数量都必须完全一样。
+        另外确认双方都成功创建或加入了房间，并且房主已经启动了服务端。
+        如果还是不行，把联机页里的「联机日志」发到 Issue。
+      </p>
+    </details>
+
+    <details class="faq">
+      <summary>NeoForge 装不上怎么办？</summary>
+      <p>
+        已知问题：上游 Maven 仓库在国外，国内直连会超时，而且安装器内部不走镜像。
+        临时办法是先在设置里配好代理再装。Forge 不受影响。
+      </p>
+    </details>
+
+    <details class="faq">
+      <summary>报错了怎么反馈？</summary>
+      <p>
+        带上 <code>%APPDATA%\Daybreak\logs</code> 目录下的日志，联机问题请一并附上联机页的「联机日志」，
+        到 <a href="https://github.com/gan4012/Daybreak/issues" target="_blank" rel="noopener">GitHub Issue</a> 提。
+      </p>
+    </details>
+  </div>
+</section>
+
+<footer class="footer">
+  <div class="wrap footer-inner">
+    <div>
+      <div class="footer-name">Daybreak 破晓启动器</div>
+      <p class="footer-disclaimer">
+        本项目与 Mojang Studios 及 Microsoft 无关。Minecraft 是 Mojang Synergies AB 的商标。
+        本软件免费提供，不含任何游戏本体文件，游戏资源由启动器在运行时从官方源下载。
+      </p>
+    </div>
+    <div class="footer-links">
+      <a href="https://github.com/gan4012/Daybreak" target="_blank" rel="noopener">GitHub</a>
+      <a href="https://gitee.com/wergansailikebai/daybreak" target="_blank" rel="noopener">Gitee</a>
+      <a href="https://github.com/gan4012/Daybreak/issues" target="_blank" rel="noopener">反馈</a>
+      <a href="https://github.com/gan4012/Daybreak/blob/main/LICENSE" target="_blank" rel="noopener">MIT 许可证</a>
+    </div>
+  </div>
+</footer>
+
+<script src="assets/config.js"></script>
+<script src="assets/app.js"></script>
+</body>
+</html>

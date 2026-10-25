@@ -184,3 +184,47 @@ public class EasyTierArgumentsTests
         }
     }
 }
+/// <summary>relay.txt 解析:带注释头是正常写法,不能被误判为未配置。</summary>
+public class RelayConfigParsingTests
+{
+    [Theory]
+    [InlineData("# 注释\n\n1.2.3.4:11010\n", "1.2.3.4:11010")]
+    [InlineData("# 注释一\n# 注释二\nhost.example:9999\n", "host.example:9999")]
+    [InlineData("\n\n  host.example:9999  \n", "host.example:9999")]
+    [InlineData("host.example:9999", "host.example:9999")]
+    public void ParsesFirstNonCommentLine(string content, string expected)
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "dbk-relay-test-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, "relay.txt"), content);
+            var line = File.ReadAllLines(Path.Combine(dir, "relay.txt"))
+                .Select(l => l.Trim())
+                .FirstOrDefault(l => l.Length > 0 && !l.StartsWith('#'));
+
+            Assert.Equal(expected, line);
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Theory]
+    [InlineData("# 只有注释\n")]
+    [InlineData("")]
+    [InlineData("   \n  \n")]
+    public void CommentsOnlyFile_YieldsNoEndpoint(string content)
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "dbk-relay-test-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, "relay.txt"), content);
+            var line = File.ReadAllLines(Path.Combine(dir, "relay.txt"))
+                .Select(l => l.Trim())
+                .FirstOrDefault(l => l.Length > 0 && !l.StartsWith('#'));
+
+            Assert.Null(line);
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+}

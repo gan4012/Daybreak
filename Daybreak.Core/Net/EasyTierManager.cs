@@ -54,14 +54,13 @@ public class EasyTierManager : IDisposable
                 if (!File.Exists(path))
                     return null;
 
-                var text = File.ReadAllText(path).Trim();
-                if (text.Length == 0 || text.StartsWith('#'))
-                    return null;
-
-                // 只取第一行有效内容，忽略注释
-                var line = text.Split('\n')
+                // 逐行找第一个非空、非注释行。
+                // 注意:不能因为文件"以 # 开头"就整体判空 —— relay.txt 第一行就是注释说明，
+                // 这样写会把带注释的合法文件误判成未配置(实测踩过)。
+                var line = File.ReadAllLines(path)
                     .Select(l => l.Trim())
                     .FirstOrDefault(l => l.Length > 0 && !l.StartsWith('#'));
+
                 return string.IsNullOrWhiteSpace(line) ? null : line;
             }
             catch (Exception)
@@ -70,6 +69,9 @@ public class EasyTierManager : IDisposable
             }
         }
     }
+
+    /// <summary>relay.txt 的完整路径(用于界面提示)。</summary>
+    public static string RelayConfigPath => Path.Combine(BinaryDirectory, "relay.txt");
 
     /// <summary>中继地址是否已配置。</summary>
     public static bool IsRelayConfigured => RelayEndpoint is not null;

@@ -1,0 +1,721 @@
+/* ============================================================
+   Daybreak 官网样式
+   设计方向:地平线。破晓不是夜也不是昼,是天刚亮的那一瞬。
+   全站一条地平线贯穿:上方是天空,下方是地面,内容都在这条线之下。
+   ============================================================ */
+
+/* ---------- 字体 ---------- */
+/* 得意黑(Smiley Sans,OFL):紧凑、微斜、有冲劲,用于标题与品牌名。
+   页面只需要几百个汉字,已做子集化(witness scripts/subset-font.py)。 */
+@font-face {
+    font-family: "Smiley Sans";
+    src: url("font/smiley-sans-subset.woff2") format("woff2");
+    font-weight: 400;
+    font-style: oblique 0deg 12deg;
+    font-display: swap;
+    /* 只覆盖本站用到的字符,未命中时回退系统字体 */
+}
+
+/* ---------- 设计 token ---------- */
+:root {
+    /* 黎明色板:从真实的天光顺序上取色,不是随手挑的深色 + 高饱和强调色 */
+    --night:    #0E1220;   /* 天顶:深靛蓝 */
+    --dusk:     #2A1B33;   /* 高空过渡:梅子紫 */
+    --ember:    #FF8A3D;   /* 地平线:品牌橙 */
+    --rose:     #F4517F;   /* 破晓云:品牌粉 */
+    --daybreak: #FFD9A0;   /* 初光:淡金 */
+    --mist:     #C9CFE0;   /* 冷灰紫,正文 */
+
+    /* 派生 */
+    --ink:        #080B14;
+    --line:       rgba(255, 217, 160, 0.14);
+    --line-strong:rgba(255, 217, 160, 0.28);
+    --text:       #E8ECF6;
+    --text-dim:   #9AA3BA;
+    --text-faint: #6C7590;
+
+    /* 缓动:内置 ease 太弱,用更强的自定义曲线(Emil Kowalski 的做法) */
+    --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+    --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+
+    /* 版心 */
+    --wrap: 1120px;
+    --gutter: 24px;
+
+    /* 地平线位置(占 hero 高度的比例) */
+    --horizon: 68%;
+}
+
+/* ---------- 基础 ---------- */
+*, *::before, *::after { box-sizing: border-box; }
+
+html {
+    scroll-behavior: smooth;
+    -webkit-text-size-adjust: 100%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+
+body {
+    margin: 0;
+    background: var(--night);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI",
+                 "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei",
+                 "Source Han Sans SC", "Noto Sans SC", sans-serif;
+    font-size: 16px;
+    line-height: 1.7;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+}
+
+/* 正文行长控制在 80 字符以内 */
+p { max-width: 62ch; }
+
+img { max-width: 100%; height: auto; display: block; }
+
+/* Grid/Flex 子项的 min-width 默认是 auto，图片的固有宽度(1280px)会把容器撑破，
+   在窄屏上表现为整页横向溢出、文字被切掉。必须显式压回 0。 */
+.hero-inner,
+.hero-shot,
+.mp-shot,
+.mp-steps > *,
+.cap > * {
+    min-width: 0;
+}
+
+/* 移动端兜底:任何情况下都不允许横向滚动 */
+html, body { overflow-x: clip; }
+
+a { color: var(--daybreak); text-decoration: none; }
+a:hover { text-decoration: underline; text-underline-offset: 3px; }
+
+code {
+    font-family: ui-monospace, SFMono-Regular, "Cascadia Mono", Consolas, monospace;
+    font-size: 0.9em;
+    background: rgba(255, 217, 160, 0.09);
+    border: 1px solid rgba(255, 217, 160, 0.14);
+    padding: 0.1em 0.38em;
+    border-radius: 4px;
+    color: var(--daybreak);
+}
+
+/* 键盘焦点必须可见 */
+:focus-visible {
+    outline: 2px solid var(--ember);
+    outline-offset: 3px;
+    border-radius: 4px;
+}
+
+.wrap {
+    width: 100%;
+    max-width: var(--wrap);
+    margin-inline: auto;
+    padding-inline: var(--gutter);
+}
+.wrap-narrow { max-width: 760px; }
+
+/* ---------- 导航 ---------- */
+.nav {
+    position: fixed;
+    inset: 0 0 auto 0;
+    z-index: 100;
+    padding: 18px 0;
+    background: linear-gradient(180deg, rgba(8, 11, 20, 0.72), transparent);
+    backdrop-filter: blur(8px);
+    transition: background 260ms var(--ease-out);
+}
+.nav.scrolled {
+    background: rgba(8, 11, 20, 0.88);
+    border-bottom: 1px solid var(--line);
+}
+.nav-inner {
+    max-width: var(--wrap);
+    margin-inline: auto;
+    padding-inline: var(--gutter);
+    display: flex;
+    align-items: center;
+    gap: 28px;
+}
+.brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--text);
+    font-family: "Smiley Sans", sans-serif;
+    font-size: 19px;
+    letter-spacing: 0.02em;
+}
+.brand:hover { text-decoration: none; }
+.brand-mark { width: 26px; height: 26px; flex: none; }
+.brand-text em { font-style: normal; color: var(--daybreak); }
+
+.nav-links {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 22px;
+    font-size: 14px;
+}
+.nav-links a { color: var(--text-dim); transition: color 180ms var(--ease-out); }
+.nav-links a:hover { color: var(--text); text-decoration: none; }
+.nav-github {
+    border: 1px solid var(--line-strong);
+    padding: 5px 14px;
+    border-radius: 100px;
+    color: var(--text) !important;
+}
+
+/* ---------- Hero:天空 + 地平线 ---------- */
+.hero {
+    position: relative;
+    min-height: 100svh;
+    display: flex;
+    align-items: flex-end;
+    padding-top: 120px;
+    overflow: hidden;
+    isolation: isolate;
+}
+
+/* 天空:从天顶的深靛蓝,一路过渡到地平线的橙红 */
+.hero-sky {
+    position: absolute;
+    inset: 0;
+    z-index: -3;
+    background:
+        radial-gradient(120% 62% at 50% 100%,
+            rgba(255, 138, 61, 0.55) 0%,
+            rgba(244, 81, 127, 0.28) 32%,
+            rgba(42, 27, 51, 0.10) 62%,
+            transparent 78%),
+        linear-gradient(180deg,
+            var(--night) 0%,
+            #131A2E 34%,
+            #2A1B33 58%,
+            #5E2C3E 74%,
+            #A8483C 88%);
+}
+
+/* 地平线上一团初光,是整页唯一的"亮点",其余都压低 */
+.hero-sun {
+    position: absolute;
+    left: 50%;
+    top: var(--horizon);
+    width: min(760px, 88vw);
+    aspect-ratio: 1 / 1;
+    transform: translate(-50%, -50%) scale(0.7);
+    z-index: -2;
+    border-radius: 50%;
+    background: radial-gradient(circle,
+        rgba(255, 217, 160, 0.85) 0%,
+        rgba(255, 196, 77, 0.42) 26%,
+        rgba(255, 138, 61, 0.16) 52%,
+        transparent 70%);
+    filter: blur(6px);
+    opacity: 0;
+    animation: sun-rise 1400ms var(--ease-out) 180ms forwards;
+}
+
+@keyframes sun-rise {
+    from { opacity: 0; transform: translate(-50%, -46%) scale(0.7); }
+    to   { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+
+/* 地平线本身:一条 1px 的亮线 */
+.hero-horizon {
+    position: absolute;
+    left: 0; right: 0;
+    top: var(--horizon);
+    height: 1px;
+    z-index: -1;
+    background: linear-gradient(90deg,
+        transparent 0%,
+        rgba(255, 217, 160, 0.18) 12%,
+        rgba(255, 217, 160, 0.62) 50%,
+        rgba(255, 217, 160, 0.18) 88%,
+        transparent 100%);
+    transform: scaleX(0);
+    transform-origin: center;
+    animation: horizon-draw 1100ms var(--ease-out) 520ms forwards;
+}
+
+@keyframes horizon-draw {
+    to { transform: scaleX(1); }
+}
+
+/* 地平线以下:地面。颜色比天空更沉,内容落在这里 */
+.hero-ground {
+    position: absolute;
+    left: 0; right: 0;
+    top: var(--horizon);
+    bottom: 0;
+    z-index: -2;
+    background:
+        linear-gradient(180deg,
+            rgba(14, 18, 32, 0.10) 0%,
+            rgba(8, 11, 20, 0.82) 38%,
+            var(--ink) 100%);
+}
+
+.hero-inner {
+    position: relative;
+    width: 100%;
+    max-width: var(--wrap);
+    margin-inline: auto;
+    padding-inline: var(--gutter);
+    padding-bottom: 0;
+    display: grid;
+    /* minmax(0,1fr):不让图片的固有宽度决定列宽 */
+    grid-template-columns: minmax(0, 1fr);
+    gap: 40px;
+}
+
+.hero-text {
+    max-width: 660px;
+    padding-bottom: 28px;
+}
+
+/* 标题:整句一个处理,不做"只给半句上渐变"那种常见做法 */
+.hero h1 {
+    font-family: "Smiley Sans", sans-serif;
+    font-size: clamp(44px, 7.2vw, 92px);
+    line-height: 1.06;
+    letter-spacing: 0.005em;
+    margin: 0 0 22px;
+    color: var(--text);
+    text-shadow: 0 2px 30px rgba(8, 11, 20, 0.5);
+    opacity: 0;
+    transform: translateY(18px);
+    animation: rise 900ms var(--ease-out) 420ms forwards;
+}
+
+.hero h1 .dawn {
+    color: var(--daybreak);
+}
+
+.hero-sub {
+    font-size: clamp(15px, 1.6vw, 18px);
+    line-height: 1.75;
+    color: var(--mist);
+    max-width: 46ch;
+    margin: 0 0 30px;
+    opacity: 0;
+    transform: translateY(14px);
+    animation: rise 800ms var(--ease-out) 620ms forwards;
+}
+
+@keyframes rise {
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.hero-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    opacity: 0;
+    transform: translateY(14px);
+    animation: rise 800ms var(--ease-out) 760ms forwards;
+}
+
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 1;
+    padding: 14px 26px;
+    border-radius: 8px;
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: transform 140ms var(--ease-out),
+                background-color 180ms var(--ease-out),
+                border-color 180ms var(--ease-out);
+}
+/* 按钮按下要有反馈 */
+.btn:active { transform: scale(0.975); }
+
+.btn-primary {
+    background: linear-gradient(135deg, var(--daybreak), var(--ember) 58%, var(--rose));
+    color: #1A0E06;
+    box-shadow: 0 6px 26px -8px rgba(255, 138, 61, 0.65);
+}
+.btn-primary:hover {
+    background: linear-gradient(135deg, #FFE4BC, #FF9A54 58%, #FF6A90);
+    text-decoration: none;
+}
+
+.btn-ghost {
+    color: var(--text);
+    border-color: var(--line-strong);
+    background: rgba(255, 255, 255, 0.03);
+}
+.btn-ghost:hover {
+    background: rgba(255, 255, 255, 0.07);
+    text-decoration: none;
+}
+
+/* 截图立在地平线上,像太阳升起 */
+.hero-shot {
+    justify-self: center;
+    width: min(100%, 1040px);
+    margin-bottom: -14%;
+    opacity: 0;
+    transform: translateY(60px) scale(0.97);
+    animation: shot-rise 1200ms var(--ease-out) 880ms forwards;
+}
+.hero-shot img {
+    width: 100%;
+    border-radius: 12px;
+    box-shadow:
+        0 40px 90px -30px rgba(0, 0, 0, 0.85),
+        0 0 0 1px rgba(255, 217, 160, 0.16),
+        0 0 70px -18px rgba(255, 138, 61, 0.42);
+}
+
+@keyframes shot-rise {
+    to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* ---------- 通用区块 ---------- */
+.section {
+    position: relative;
+    padding: 110px 0;
+    background: var(--ink);
+}
+.section + .section { padding-top: 0; }
+
+.section-title {
+    font-family: "Smiley Sans", sans-serif;
+    font-size: clamp(30px, 4vw, 46px);
+    line-height: 1.18;
+    margin: 0 0 14px;
+    color: var(--text);
+}
+.section-sub {
+    font-size: 16px;
+    color: var(--text-dim);
+    margin: 0 0 54px;
+    max-width: 52ch;
+}
+
+/* ---------- 能力:编辑式排版,不用同质卡片墙 ---------- */
+.capabilities {
+    display: grid;
+    gap: 0;
+    border-top: 1px solid var(--line);
+}
+
+.cap {
+    display: grid;
+    grid-template-columns: minmax(0, 4fr) minmax(0, 6fr);
+    gap: 40px;
+    padding: 38px 0;
+    border-bottom: 1px solid var(--line);
+    align-items: start;
+}
+.cap h3 {
+    font-family: "Smiley Sans", sans-serif;
+    font-size: 22px;
+    line-height: 1.35;
+    margin: 0;
+    color: var(--text);
+}
+.cap p {
+    margin: 0;
+    font-size: 15px;
+    color: var(--text-dim);
+    max-width: 56ch;
+}
+.cap p strong { color: var(--text); font-weight: 600; }
+
+/* 第一个能力块给更大的字号,形成层次(不是所有块一样大) */
+.cap:first-child {
+    padding: 46px 0 42px;
+}
+.cap:first-child h3 { font-size: 28px; }
+.cap:first-child p { font-size: 16px; }
+
+/* ---------- 联机:内容本身是序列,编号才有意义 ---------- */
+.mp {
+    position: relative;
+    padding-top: 110px;
+    background:
+        radial-gradient(90% 50% at 50% 0%, rgba(244, 81, 127, 0.10), transparent 70%),
+        var(--ink);
+}
+
+.mp-steps {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0;
+    margin-bottom: 60px;
+    border-left: 1px solid var(--line);
+}
+.mp-step {
+    padding: 0 28px 0 26px;
+    border-right: 1px solid var(--line);
+}
+.mp-num {
+    font-family: "Smiley Sans", sans-serif;
+    font-size: 13px;
+    color: var(--ember);
+    letter-spacing: 0.08em;
+    margin-bottom: 14px;
+}
+.mp-step h3 {
+    font-family: "Smiley Sans", sans-serif;
+    font-size: 20px;
+    margin: 0 0 10px;
+    color: var(--text);
+}
+.mp-step p {
+    font-size: 14px;
+    color: var(--text-dim);
+    margin: 0;
+}
+.mp-step ul {
+    margin: 14px 0 0;
+    padding: 0;
+    list-style: none;
+    font-size: 14px;
+    color: var(--text-dim);
+}
+.mp-step li {
+    position: relative;
+    padding-left: 16px;
+    margin-bottom: 6px;
+}
+.mp-step li::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0.72em;
+    width: 5px;
+    height: 1px;
+    background: var(--ember);
+}
+
+.mp-shot {
+    margin-bottom: 34px;
+}
+.mp-shot img {
+    width: 100%;
+    border-radius: 12px;
+    box-shadow:
+        0 30px 70px -26px rgba(0, 0, 0, 0.8),
+        0 0 0 1px rgba(255, 217, 160, 0.14);
+}
+
+.note {
+    font-size: 13.5px;
+    line-height: 1.85;
+    color: var(--text-faint);
+    border-left: 2px solid rgba(255, 138, 61, 0.45);
+    padding-left: 16px;
+    max-width: 60ch;
+}
+
+/* ---------- 下载 ---------- */
+.download-meta {
+    font-size: 14px;
+    color: var(--text-dim);
+    margin-bottom: 34px;
+}
+
+.dl-list {
+    display: grid;
+    gap: 12px;
+}
+
+.dl {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 20px;
+    padding: 24px 26px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.018);
+    color: var(--text);
+    transition: border-color 200ms var(--ease-out),
+                background-color 200ms var(--ease-out),
+                transform 200ms var(--ease-out);
+}
+.dl:hover {
+    text-decoration: none;
+    border-color: var(--line-strong);
+    background: rgba(255, 255, 255, 0.04);
+    transform: translateY(-1px);
+}
+
+/* 主渠道用更重的视觉权重,和次要渠道区分开(不是三张一样的卡) */
+.dl-primary {
+    background:
+        linear-gradient(135deg, rgba(255, 138, 61, 0.14), rgba(244, 81, 127, 0.09));
+    border-color: rgba(255, 138, 61, 0.42);
+}
+.dl-primary:hover {
+    border-color: rgba(255, 138, 61, 0.7);
+    background:
+        linear-gradient(135deg, rgba(255, 138, 61, 0.2), rgba(244, 81, 127, 0.13));
+}
+
+.dl-name {
+    display: block;
+    font-family: "Smiley Sans", sans-serif;
+    font-size: 19px;
+    margin-bottom: 4px;
+}
+.dl-desc {
+    display: block;
+    font-size: 13.5px;
+    color: var(--text-dim);
+}
+.dl-tag {
+    font-size: 11.5px;
+    color: var(--ember);
+    border: 1px solid rgba(255, 138, 61, 0.45);
+    border-radius: 100px;
+    padding: 3px 10px;
+    white-space: nowrap;
+}
+.dl-tag.dim {
+    color: var(--text-faint);
+    border-color: var(--line);
+}
+.dl[aria-disabled="true"] {
+    opacity: 0.45;
+    pointer-events: none;
+}
+
+.dl-steps {
+    margin-top: 46px;
+}
+.dl-steps h3 {
+    font-family: "Smiley Sans", sans-serif;
+    font-size: 18px;
+    margin: 0 0 16px;
+}
+.dl-steps ol {
+    margin: 0 0 18px;
+    padding-left: 22px;
+    color: var(--text-dim);
+    font-size: 15px;
+}
+.dl-steps li { margin-bottom: 8px; }
+.dl-steps li::marker { color: var(--ember); }
+
+/* ---------- FAQ ---------- */
+.faq {
+    border-bottom: 1px solid var(--line);
+}
+.faq summary {
+    cursor: pointer;
+    padding: 22px 0;
+    font-size: 16.5px;
+    font-weight: 600;
+    color: var(--text);
+    list-style: none;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+}
+.faq summary::-webkit-details-marker { display: none; }
+.faq summary::after {
+    content: "";
+    flex: none;
+    width: 9px;
+    height: 9px;
+    border-right: 1.5px solid var(--ember);
+    border-bottom: 1.5px solid var(--ember);
+    transform: rotate(45deg);
+    transition: transform 220ms var(--ease-out);
+}
+.faq[open] summary::after { transform: rotate(-135deg); }
+.faq p {
+    margin: 0 0 22px;
+    font-size: 15px;
+    color: var(--text-dim);
+    max-width: 66ch;
+}
+
+/* ---------- 页脚 ---------- */
+.footer {
+    padding: 64px 0 56px;
+    background: var(--ink);
+    border-top: 1px solid var(--line);
+}
+.footer-inner {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 32px;
+    justify-content: space-between;
+    align-items: flex-start;
+}
+.footer-name {
+    font-family: "Smiley Sans", sans-serif;
+    font-size: 17px;
+    margin-bottom: 10px;
+}
+.footer-disclaimer {
+    font-size: 12.5px;
+    line-height: 1.8;
+    color: var(--text-faint);
+    max-width: 52ch;
+    margin: 0;
+}
+.footer-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+    font-size: 13.5px;
+}
+.footer-links a { color: var(--text-dim); }
+.footer-links a:hover { color: var(--daybreak); }
+
+/* ---------- 响应式 ---------- */
+@media (max-width: 860px) {
+    :root { --horizon: 62%; }
+
+    .nav-links { gap: 16px; font-size: 13px; }
+    .nav-links a:not(.nav-github) { display: none; }
+
+    .hero { min-height: auto; padding-top: 108px; }
+    .hero-shot { margin-bottom: -8%; }
+    .hero-text { padding-bottom: 20px; }
+
+    .section { padding: 74px 0; }
+
+    .cap {
+        grid-template-columns: 1fr;
+        gap: 12px;
+        padding: 28px 0;
+    }
+    .cap:first-child h3 { font-size: 22px; }
+
+    .mp-steps {
+        grid-template-columns: 1fr;
+        border-left: none;
+    }
+    .mp-step {
+        padding: 22px 0;
+        border-right: none;
+        border-top: 1px solid var(--line);
+    }
+
+    .dl {
+        grid-template-columns: 1fr;
+        gap: 12px;
+    }
+    .dl-tag { justify-self: start; }
+}

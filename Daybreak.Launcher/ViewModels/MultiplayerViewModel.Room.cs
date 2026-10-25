@@ -80,8 +80,10 @@ public partial class MultiplayerViewModel
 
             if (!EasyTierManager.IsRelayConfigured)
             {
-                return $"中继节点未配置:未找到 {Path.Combine(EasyTierManager.BinaryDirectory, "relay.txt")}\n" +
-                       "该文件应包含一行 host:port。请重新安装启动器,或手动创建该文件。";
+                var path = EasyTierManager.RelayConfigPath;
+                return System.IO.File.Exists(path)
+                    ? $"中继节点配置无效:{path} 里没有有效的 host:port 行。\n请确认文件里有一行形如 主机:端口 的内容。"
+                    : $"中继节点未配置:未找到 {path}\n请重新安装启动器,或手动创建该文件并在里面写一行 主机:端口。";
             }
 
             return "";
