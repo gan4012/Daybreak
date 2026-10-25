@@ -15,10 +15,10 @@
 # 构建(注意 .slnx 新格式)
 dotnet build Daybreak.slnx -c Debug
 
-# 测试(43 项:35 离线单元 + 8 联网集成;集成测试带 [Trait("Category","Integration")])
+# 测试(50 项:39 离线单元 + 11 联网集成;集成测试带 [Trait("Category","Integration")])
 dotnet test Daybreak.slnx -c Debug --no-build
 
-# 只跑离线快速测试(CI 用这个;集成测试会真下载游戏 jar / Java 运行时,约 5 分钟)
+# 只跑离线快速测试(CI 用这个;集成测试会真下载游戏 jar / Java 运行时 / Forge 安装器,较慢)
 dotnet test Daybreak.slnx -c Debug --no-build --filter "Category!=Integration"
 
 # 实机运行
@@ -134,10 +134,24 @@ Daybreak.slnx(.NET 10 新格式解决方案)
 - **Gitee 资产不支持 Range**:请求带 `Range` 仍返回 200 而非 206,断点续传会退化为重下。
   实测 Gitee 下载 77MB 稳定 **1.45 MB/s**(53 秒完成,哈希与本地一致);
   同期 GitHub 直连多次在连接阶段超时。故更新器默认 **Gitee 优先 → GitHub 回退**。
-- **GCM 浏览器授权在国内常超时**:`git push` 走 HTTPS + Git Credential Manager 会报
-  `发送请求时出错 / 基础连接已经关闭`,并退回索要密码(GitHub 已不支持密码推送)。
-  已改用 SSH,且 `/etc` 级配置写在 `~/.ssh/config`:
-  `Host github.com → HostName ssh.github.com / Port 443 / IdentityFile ~/.ssh/id_ed25519_daybreak`。
+- **现代 Forge/NeoForge 的版本目录里只有 JSON,没有客户端 jar**:jar 通过 `inheritsFrom` 指向
+  原版版本(如 `versions/1.20.1/1.20.1.jar`),加载器只是往 `libraries/` 放 patch 产物。
+  校验安装结果时必须沿继承链解析,不能直接找同名 jar(集成测试里有 `ResolveClientJar` 实现)。
+- **NeoForge 安装不走镜像(已知限制)**:`NeoForgeInstaller` 只有一个构造函数
+  `NeoForgeInstaller(MinecraftLauncher)`,**无法注入 HttpClient**,内部自带 HttpClient,
+  因此 ResilientHttpHandler 的镜像改写与重试对它无效。
+  实测国内直连 `maven.neoforged.net` 会在连接阶段超时(21s 后失败,无重试),
+  而 BMCLAPI 已完整镜像该仓库(`https://bmclapi2.bangbang93.com/maven/net/neoforged/...`,已验证可取安装器 jar)。
+  **影响**:国内用户默认装不了 NeoForge;Forge 不受影响(实测安装成功)。
+  可选解法(未实施):① 预先把 BMCLAPI 上的安装器 jar 与依赖喂给 CmlLib;
+  ② 等 CmlLib 支持注入;③ 引导用户配代理(设置页已支持)。
+- **首次启动引导必须临时改 ShutdownMode**:WPF 默认 `OnLastWindowClose`,
+  模态引导窗是引导期间唯一窗口,关闭它会让应用在 `MainWindow.Show()` 之前直接退出
+  (表现为"走完引导启动器就消失",编译期完全看不出来)。
+  引导前设 `ShutdownMode.OnExplicitShutdown`,显示主窗口后恢复 `OnMainWindowClose`。
+- **XAML 根 Grid 的行数要和 Grid.Row 用到的最大索引对得上**:VersionsPage 只定义了 3 个
+  RowDefinition 却用了 `Grid.Row="3"`(状态文字),WPF 会把它挤到最后一行,
+  导致状态文字与 Mod 管理卡片**重叠**。改布局网格时务必数一遍行数。
 
 ## 实机验证工作流
 
@@ -156,10 +170,23 @@ Daybreak.slnx(.NET 10 新格式解决方案)
 - 完善批次:版本管理页(删除/打开目录/Mod 清理/更新检查)、可编辑设置页、崩溃诊断(12 规则)、
   CurseForge 免 key 导入、安装记录持久化、内测打包脚本(package.ps1 → 77MB 自包含 zip,含主程序+更新器)
 - **未完成/已知缺口**:
-  - Mod 更新检查无持久化 UI 入口(逻辑已在版本管理页,可从资源市场一键触发更佳)
-  - CurseForge zip 导入未用真实整合包实测(逻辑同 mrpack,理论可用)
-  - Forge/NeoForge 完整安装未实跑(管线与 Fabric 同,风险低)
   - 微软登录 ClientId 用的是 CmlLib 示例 id,**发布前必须换**(设置页已支持填写自有 ClientId)
+  - **NeoForge 安装不走镜像**:国内网络默认装不了(详见"已知坑";CmlLib 无法注入 HttpClient)
+  - Gitee 发行版附件容量上限尚未确认(当前 3 个版本约 230MB,未触发限制)
+- **第三阶段验证完成(2026-10-26)**——此前"理论可用但未实测"的路径已逐个实跑:
+  - ✅ **Forge 1.20.1 真实安装**(`1.20.1-forge-47.4.28`):完整跑通 processors 执行链
+    (下载原版 → 官方 Java 17 → Forge 安装器 → binarypatcher 打补丁),2 分 15 秒通过
+  - ✅ **CurseForge 整合包导入**:用真实项目 ID(JEI `238222`)经 cfwidget 查到真实 fileID,
+    构造 CF 规范 zip → 下载 4.6MB jar 到 mods/ + overrides 正确解压,3 秒通过
+  - ❌ **NeoForge 安装**:被 maven.neoforged.net 不可达阻塞(非代码问题,已加连通性预检与排查提示)
+  - 📌 副产品修复:DownloadMirror 新增 Forge/NeoForge Maven 改写规则(含 4 个单元测试),
+    Forge 路径因此获得 BMCLAPI 加速
+- **体验补完(2026-10-26)**:
+  - ✅ 首次启动引导:三步向导(游戏目录 → 内存/镜像 → 完成),能识别已有 .minecraft 目录并提示复用;
+    仅对"真首次"(连 config.json 都不存在)弹出,老用户静默跳过
+  - ✅ Mod 列表搜索/排序:按文件名搜索,支持 名称/大小/更新状态 三种排序(已实机截图验证)
+  - ✅ Mod 一键更新:可更新项旁出现「更新」按钮,支持「全部更新」批量处理(下载新版 → 删旧文件 → 刷新记录)
+  - 🐞 实机发现并修复:引导后主程序不启动(ShutdownMode)、版本页状态文字与 Mod 卡片重叠(缺 RowDefinition)
 - **M5 进展(2026-10-26 完成)**:
   - ✅ 仓库:GitHub `https://github.com/gan4012/Daybreak`(公开,SSH over 443 推送)
     + Gitee 镜像 `https://gitee.com/wergansailikebai/daybreak`(公开,HTTPS + 私人令牌推送)

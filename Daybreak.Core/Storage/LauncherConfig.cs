@@ -71,6 +71,12 @@ public class LauncherConfig
     /// <summary>窗口是否最大化。</summary>
     public bool WindowMaximized { get; set; }
 
+    /// <summary>
+    /// 是否已完成首次启动引导。老用户升级上来时该字段为 false,
+    /// 但配置文件已存在,据此可区分"真首次"与"老用户"(见 App 里的判断)。
+    /// </summary>
+    public bool HasCompletedFirstRun { get; set; }
+
     /// <summary>测试用存储目录重定向;生产环境必须保持为 null。</summary>
     internal static string? DirectoryOverrideForTests;
 

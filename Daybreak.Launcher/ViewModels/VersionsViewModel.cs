@@ -11,12 +11,15 @@ using Serilog;
 
 namespace Daybreak.Launcher.ViewModels;
 
-/// <summary>版本内的 Mod 文件(含更新检查结果)。</summary>
+/// <summary>版本内的 Mod 文件(含更新检查结果与一键更新状态)。</summary>
 public partial class ModFileInfoItem : ObservableObject
 {
     public required string Filename { get; init; }
     public required string SizeDisplay { get; init; }
     public required string Sha1 { get; init; }
+
+    /// <summary>文件字节数(排序用;SizeDisplay 是给人看的字符串,无法比较)。</summary>
+    public long SizeBytes { get; init; }
 
     [ObservableProperty]
     private string? _updateStatus;
@@ -24,16 +27,30 @@ public partial class ModFileInfoItem : ObservableObject
     [ObservableProperty]
     private bool _isChecking;
 
-    public string? LatestVersionNumber { get; private set; }
+    [ObservableProperty]
+    private bool _isUpdating;
 
-    public void SetUpdateInfo(string? latestVersionNumber)
+    /// <summary>是否有可更新的新版本(有才显示「更新」按钮)。</summary>
+    [ObservableProperty]
+    private bool _canUpdate;
+
+    /// <summary>远端可更新的版本;已是最新或非 Modrinth 资源时为 null。</summary>
+    public ModrinthVersion? RemoteVersion { get; private set; }
+
+    public void SetUpdateInfo(ModrinthVersion? remote)
     {
-        LatestVersionNumber = latestVersionNumber;
-        UpdateStatus = latestVersionNumber is null
-            ? "非 Modrinth 资源"
-            : Filename.Contains(latestVersionNumber, StringComparison.OrdinalIgnoreCase)
-                ? "已是最新"
-                : $"可更新 → {latestVersionNumber}";
+        if (remote is null)
+        {
+            RemoteVersion = null;
+            CanUpdate = false;
+            UpdateStatus = "非 Modrinth 资源";
+            return;
+        }
+
+        var isLatest = Filename.Contains(remote.VersionNumber, StringComparison.OrdinalIgnoreCase);
+        RemoteVersion = isLatest ? null : remote;
+        CanUpdate = !isLatest;
+        UpdateStatus = isLatest ? "已是最新" : $"可更新 → {remote.VersionNumber}";
     }
 }
 
@@ -41,9 +58,22 @@ public partial class VersionsViewModel : ObservableObject
 {
     private readonly LauncherConfig _config = LauncherConfig.Load();
     private LaunchService? _launchService;
+    private ModInstallService? _installService;
+
+    /// <summary>当前版本的完整 Mod 列表(Mods 是它经过搜索/排序后的视图)。</summary>
+    private readonly List<ModFileInfoItem> _allMods = [];
 
     public ObservableCollection<InstalledVersionInfo> Versions { get; } = [];
     public ObservableCollection<ModFileInfoItem> Mods { get; } = [];
+
+    /// <summary>Mod 列表排序方式。</summary>
+    public ObservableCollection<string> ModSortModes { get; } = ["名称", "大小", "更新状态"];
+
+    [ObservableProperty]
+    private string _modSearchText = "";
+
+    [ObservableProperty]
+    private int _selectedModSortIndex;
 
     [ObservableProperty]
     private InstalledVersionInfo? _selectedVersion;
@@ -57,6 +87,10 @@ public partial class VersionsViewModel : ObservableObject
     [ObservableProperty]
     private string _selectedVersionInfo = "";
 
+    /// <summary>Mod 列表标题:带搜索时的计数提示。</summary>
+    [ObservableProperty]
+    private string _modListSummary = "";
+
     public VersionsViewModel() => _ = RefreshAsync();
 
     partial void OnSelectedVersionChanged(InstalledVersionInfo? value)
@@ -65,8 +99,46 @@ public partial class VersionsViewModel : ObservableObject
         _ = LoadModsAsync();
     }
 
+    partial void OnModSearchTextChanged(string value) => ApplyModFilter();
+
+    partial void OnSelectedModSortIndexChanged(int value) => ApplyModFilter();
+
+    /// <summary>按当前搜索词与排序方式重建 Mods 视图。</summary>
+    private void ApplyModFilter()
+    {
+        var keyword = ModSearchText.Trim();
+
+        IEnumerable<ModFileInfoItem> query = _allMods;
+        if (keyword.Length > 0)
+        {
+            query = query.Where(m => m.Filename.Contains(keyword, StringComparison.OrdinalIgnoreCase));
+        }
+
+        query = SelectedModSortIndex switch
+        {
+            // 大小:从大到小(找大体积 Mod 时有用)
+            1 => query.OrderByDescending(m => m.SizeBytes).ThenBy(m => m.Filename, StringComparer.OrdinalIgnoreCase),
+            // 更新状态:可更新的排前面,便于批量处理
+            2 => query.OrderByDescending(m => m.CanUpdate)
+                      .ThenBy(m => m.Filename, StringComparer.OrdinalIgnoreCase),
+            // 名称(默认)
+            _ => query.OrderBy(m => m.Filename, StringComparer.OrdinalIgnoreCase),
+        };
+
+        Mods.Clear();
+        foreach (var mod in query)
+            Mods.Add(mod);
+
+        ModListSummary = keyword.Length > 0
+            ? $"Mod 列表({Mods.Count} / {_allMods.Count},筛选「{keyword}」)"
+            : $"Mod 列表({_allMods.Count})";
+    }
+
     private LaunchService GetService() =>
         _launchService ??= new LaunchService(_config.GameDirectory, _config.Mirror, _config.VersionIsolation);
+
+    private ModInstallService GetInstallService() =>
+        _installService ??= new ModInstallService(GetService(), _config.Mirror);
 
     [RelayCommand]
     private async Task RefreshAsync()
@@ -113,11 +185,12 @@ public partial class VersionsViewModel : ObservableObject
     [RelayCommand]
     private async Task LoadModsAsync()
     {
+        _allMods.Clear();
+        Mods.Clear();
+        ModListSummary = "";
+
         if (SelectedVersion is null)
-        {
-            Mods.Clear();
             return;
-        }
 
         var modsDir = GetService().ResolveModsDirectory(SelectedVersion.Name);
         var mods = await Task.Run(() => GetService().GetMods(SelectedVersion.Name)
@@ -134,14 +207,18 @@ public partial class VersionsViewModel : ObservableObject
             })
             .ToList());
 
-        Mods.Clear();
         foreach (var (mod, sha1) in mods)
-            Mods.Add(new ModFileInfoItem
+        {
+            _allMods.Add(new ModFileInfoItem
             {
                 Filename = mod.Name,
                 SizeDisplay = SizeDisplay(mod.SizeBytes),
+                SizeBytes = mod.SizeBytes,
                 Sha1 = sha1,
             });
+        }
+
+        ApplyModFilter();
     }
 
     [RelayCommand]
@@ -331,6 +408,137 @@ public partial class VersionsViewModel : ObservableObject
         StatusText = $"已删除 {mod.Filename}";
     }
 
+    /// <summary>一键更新单个 Mod:下载远端最新版本 → 删除旧文件 → 刷新列表。</summary>
+    [RelayCommand]
+    private async Task UpdateModAsync(ModFileInfoItem? mod)
+    {
+        if (mod is null || SelectedVersion is null || IsBusy)
+            return;
+
+        if (mod.RemoteVersion is null)
+        {
+            StatusText = $"{mod.Filename} 没有可用的更新版本(请先检查更新)";
+            return;
+        }
+
+        var versionId = SelectedVersion.Name;
+        var newVersion = mod.RemoteVersion.VersionNumber;
+        var fileName = mod.Filename;
+
+        IsBusy = true;
+        StatusText = $"正在更新 {fileName} → {newVersion}…";
+        try
+        {
+            if (await TryUpdateModAsync(versionId, mod))
+            {
+                StatusText = $"{fileName} 已更新到 {newVersion}";
+                await LoadModsAsync();
+            }
+            else
+            {
+                StatusText = $"更新 {fileName} 失败,详见日志";
+            }
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    /// <summary>执行一次 Mod 更新,返回是否成功。不修改 IsBusy(由调用方控制)。</summary>
+    private async Task<bool> TryUpdateModAsync(string versionId, ModFileInfoItem mod)
+    {
+        var remote = mod.RemoteVersion;
+        if (remote is null)
+            return false;
+
+        var oldFileName = mod.Filename;
+        mod.IsUpdating = true;
+        try
+        {
+            var modsDir = GetService().ResolveModsDirectory(versionId);
+            var newPath = await GetInstallService().InstallModAsync(versionId, remote);
+
+            // 文件名变化的 Mod(绝大多数把版本号写进文件名)必须删掉旧文件,否则会同时存在两个版本
+            var oldPath = Path.Combine(modsDir, oldFileName);
+            if (File.Exists(oldPath) &&
+                !string.Equals(Path.GetFullPath(oldPath), Path.GetFullPath(newPath), StringComparison.OrdinalIgnoreCase))
+            {
+                try
+                {
+                    File.Delete(oldPath);
+                    Log.Information("已移除旧版本文件 {Old}", oldFileName);
+                }
+                catch (IOException ex)
+                {
+                    // 旧文件删不掉不影响新版本生效,但要让用户知道可能重复
+                    Log.Warning(ex, "旧版本文件删除失败 {Old}", oldFileName);
+                }
+            }
+
+            Log.Information("Mod 更新成功 {Old} → {Version}", oldFileName, remote.VersionNumber);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Mod 更新失败 {Mod}", oldFileName);
+            return false;
+        }
+        finally
+        {
+            mod.IsUpdating = false;
+        }
+    }
+
+    /// <summary>一键更新所有已检测出可更新的 Mod。</summary>
+    [RelayCommand]
+    private async Task UpdateAllModsAsync()
+    {
+        if (SelectedVersion is null || IsBusy)
+            return;
+
+        var pending = _allMods.Where(m => m.CanUpdate && m.RemoteVersion is not null).ToList();
+        if (pending.Count == 0)
+        {
+            StatusText = "没有可更新的 Mod(请先点「检查 Mod 更新」)";
+            return;
+        }
+
+        var confirm = System.Windows.MessageBox.Show(
+            $"将更新 {pending.Count} 个 Mod(旧版本文件会被删除),是否继续?",
+            "批量更新 Mod",
+            System.Windows.MessageBoxButton.YesNo,
+            System.Windows.MessageBoxImage.Question);
+        if (confirm != System.Windows.MessageBoxResult.Yes)
+            return;
+
+        var versionId = SelectedVersion.Name;
+        var succeeded = 0;
+        var failed = 0;
+
+        IsBusy = true;
+        try
+        {
+            for (var i = 0; i < pending.Count; i++)
+            {
+                var mod = pending[i];
+                StatusText = $"批量更新中…({i + 1}/{pending.Count}) {mod.Filename}";
+                if (await TryUpdateModAsync(versionId, mod))
+                    succeeded++;
+                else
+                    failed++;
+            }
+
+            StatusText = $"批量更新完成:成功 {succeeded} 个,失败 {failed} 个";
+            Log.Information("批量更新 Mod 完成:成功 {Ok},失败 {Fail}", succeeded, failed);
+            await LoadModsAsync();
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
     [RelayCommand]
     private async Task CheckModUpdatesAsync()
     {
@@ -343,13 +551,14 @@ public partial class VersionsViewModel : ObservableObject
         try
         {
             var client = new ModrinthClient();
-            var installService = new ModInstallService(GetService(), _config.Mirror);
+            var installService = GetInstallService();
             var records = installService.GetInstallRecords(SelectedVersion.Name)
                 .ToDictionary(r => r.Filename, StringComparer.OrdinalIgnoreCase);
             var outdated = 0;
             var checkedCount = 0;
 
-            foreach (var mod in Mods)
+            // 对完整列表做检查(不受搜索筛选影响),避免用户筛了词就漏检
+            foreach (var mod in _allMods)
             {
                 // 有安装记录的用项目 ID 精确查询;没有的回退 SHA1 反查
                 if (records.TryGetValue(mod.Filename, out var record))
@@ -359,11 +568,10 @@ public partial class VersionsViewModel : ObservableObject
                     var remote = projectVersions
                         .OrderByDescending(v => v.DatePublished)
                         .FirstOrDefault();
-                    mod.SetUpdateInfo(remote?.VersionNumber);
+                    mod.SetUpdateInfo(remote);
                     mod.IsChecking = false;
 
-                    if (remote is not null &&
-                        !mod.Filename.Contains(remote.VersionNumber, StringComparison.OrdinalIgnoreCase))
+                    if (mod.CanUpdate)
                         outdated++;
                     checkedCount++;
                 }
@@ -371,15 +579,17 @@ public partial class VersionsViewModel : ObservableObject
                 {
                     mod.IsChecking = true;
                     var remote = await client.GetVersionBySha1Async(mod.Sha1);
-                    mod.SetUpdateInfo(remote?.VersionNumber);
+                    mod.SetUpdateInfo(remote);
                     mod.IsChecking = false;
 
-                    if (remote is not null &&
-                        !mod.Filename.Contains(remote.VersionNumber, StringComparison.OrdinalIgnoreCase))
+                    if (mod.CanUpdate)
                         outdated++;
                     checkedCount++;
                 }
             }
+
+            // 更新状态变化后重排(排序方式选「更新状态」时能立刻把可更新项顶上来)
+            ApplyModFilter();
 
             StatusText = checkedCount == 0
                 ? "没有可检查的 Mod(仅支持 Modrinth 资源)"

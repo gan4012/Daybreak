@@ -9,6 +9,9 @@
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
+            <!-- 第 4 行给底部状态文字:此前只定义了 3 行,而状态文字用 Grid.Row="3",
+                 WPF 会把它挤到最后一行,导致与 Mod 管理卡片重叠。 -->
+            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
         <!-- 头部:标题 + 详情 + 操作 -->
@@ -112,6 +115,8 @@
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
 
                 <StackPanel Grid.Row="0" Orientation="Horizontal">
@@ -128,9 +133,44 @@
                         Content="检查更新"
                         MinHeight="30"
                         Margin="14,0,0,0" />
+                    <Button
+                        Command="{Binding UpdateAllModsCommand}"
+                        Content="全部更新"
+                        MinHeight="30"
+                        Padding="12,2"
+                        Margin="8,0,0,0"
+                        Style="{StaticResource BrandPrimaryButton}" />
                 </StackPanel>
 
-                <ScrollViewer Grid.Row="1" MaxHeight="150" Margin="0,8,0,0"
+                <!-- 搜索 + 排序 -->
+                <Grid Grid.Row="1" Margin="0,10,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <ui:TextBox
+                        Grid.Column="0"
+                        Text="{Binding ModSearchText, UpdateSourceTrigger=PropertyChanged}"
+                        MinHeight="30"
+                        FontSize="12"
+                        PlaceholderText="搜索文件名…" />
+                    <ComboBox
+                        Grid.Column="1"
+                        ItemsSource="{Binding ModSortModes}"
+                        SelectedIndex="{Binding SelectedModSortIndex}"
+                        MinWidth="110"
+                        MinHeight="30"
+                        Margin="10,0,0,0" />
+                </Grid>
+
+                <TextBlock
+                    Grid.Row="2"
+                    Text="{Binding ModListSummary}"
+                    FontSize="11"
+                    Opacity="0.55"
+                    Margin="0,8,0,0" />
+
+                <ScrollViewer Grid.Row="3" MaxHeight="170" Margin="0,4,0,0"
                               VerticalScrollBarVisibility="Auto">
                     <ItemsControl ItemsSource="{Binding Mods}">
                         <ItemsControl.ItemTemplate>
@@ -140,15 +180,17 @@
                                     Background="#14FFFFFF"
                                     Padding="10,5"
                                     Margin="0,2,8,2">
-                                    <Grid MinWidth="560">
+                                    <Grid MinWidth="620">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*" />
                                             <ColumnDefinition Width="Auto" />
                                             <ColumnDefinition Width="Auto" />
                                             <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="Auto" />
                                         </Grid.ColumnDefinitions>
                                         <TextBlock Text="{Binding Filename}" FontSize="12" VerticalAlignment="Center"
-                                                   TextTrimming="CharacterEllipsis" />
+                                                   TextTrimming="CharacterEllipsis"
+                                                   ToolTip="{Binding Filename}" />
                                         <TextBlock Grid.Column="1" Text="{Binding SizeDisplay}" FontSize="11"
                                                    Opacity="0.6" VerticalAlignment="Center" Margin="12,0,0,0" />
                                         <TextBlock Grid.Column="2" Text="{Binding UpdateStatus}" FontSize="11"
@@ -167,12 +209,36 @@
                                                 </Style>
                                             </TextBlock.Style>
                                         </TextBlock>
+                                        <!-- 一键更新:仅在有新版本时出现 -->
                                         <Button
                                             Grid.Column="3"
-                                            Content="删除"
                                             MinHeight="26"
                                             Padding="10,2"
                                             Margin="12,0,0,0"
+                                            Command="{Binding DataContext.UpdateModCommand, RelativeSource={RelativeSource AncestorType=Page}}"
+                                            CommandParameter="{Binding}">
+                                            <Button.Style>
+                                                <Style TargetType="Button" BasedOn="{StaticResource BrandPrimaryButton}">
+                                                    <Setter Property="Content" Value="更新" />
+                                                    <Setter Property="Visibility" Value="Collapsed" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding CanUpdate}" Value="True">
+                                                            <Setter Property="Visibility" Value="Visible" />
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding IsUpdating}" Value="True">
+                                                            <Setter Property="Content" Value="更新中…" />
+                                                            <Setter Property="IsEnabled" Value="False" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Button.Style>
+                                        </Button>
+                                        <Button
+                                            Grid.Column="4"
+                                            Content="删除"
+                                            MinHeight="26"
+                                            Padding="10,2"
+                                            Margin="8,0,0,0"
                                             Command="{Binding DataContext.DeleteModCommand, RelativeSource={RelativeSource AncestorType=Page}}"
                                             CommandParameter="{Binding}" />
                                     </Grid>
