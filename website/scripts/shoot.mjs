@@ -21,6 +21,8 @@ if (!url || !w || !h || !out) {
 const mobile = process.argv.includes('--mobile');
 const scrollIdx = process.argv.indexOf('--scroll');
 const scrollY = scrollIdx > 0 ? Number(process.argv[scrollIdx + 1]) : 0;
+const toIdx = process.argv.indexOf('--to');
+const toSelector = toIdx > 0 ? process.argv[toIdx + 1] : null;
 
 const CHROME = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
 const PORT = 9334 + Math.floor(Math.random() * 100);
@@ -67,11 +69,38 @@ await send('Emulation.setDeviceMetricsOverride', {
 });
 await send('Page.enable');
 await send('Page.navigate', { url });
-await sleep(2200);   // 等字体与入场动画
+// 等字体与入场动画
+await sleep(2200);
 
-if (scrollY > 0) {
+if (toSelector) {
+    // 滚到指定元素，并留一点顶部余量(固定导航条会遮住内容)
+    const r = await send('Runtime.evaluate', {
+        expression: `(() => {
+            const el = document.querySelector(${JSON.stringify(toSelector)});
+            if (!el) return 'not-found:' + ${JSON.stringify(toSelector)};
+            // 关掉平滑滚动，否则截到的是动画中途
+            const prev = document.documentElement.style.scrollBehavior;
+            document.documentElement.style.scrollBehavior = 'auto';
+            el.scrollIntoView({ block: 'start' });
+            window.scrollBy(0, -70);
+            document.documentElement.style.scrollBehavior = prev;
+            return 'ok y=' + Math.round(window.scrollY);
+        })()`,
+        returnByValue: true,
+    });
+    console.log('  scroll:', r.result?.result?.value);
+    await sleep(900);
+    // 触发一次 scroll，让 loading="lazy" 的图片开始加载
+    await send('Runtime.evaluate', { expression: 'window.dispatchEvent(new Event("scroll"))' });
+    await sleep(1400);
+    const after = await send('Runtime.evaluate', {
+        expression: 'JSON.stringify({y: Math.round(window.scrollY), total: document.documentElement.scrollHeight})',
+        returnByValue: true,
+    });
+    console.log('  after:', after.result?.result?.value);
+} else if (scrollY > 0) {
     await send('Runtime.evaluate', { expression: `window.scrollTo(0, ${scrollY})` });
-    await sleep(600);
+    await sleep(800);
 }
 
 const shot = await send('Page.captureScreenshot', { format: 'png' });
