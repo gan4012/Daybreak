@@ -34,7 +34,11 @@ public class DownloadEngine
         _maxParallelFiles = maxParallelFiles;
     }
 
-    private HttpClient CreateHttp() => new(new ResilientHttpHandler(_mirror));
+    private HttpClient CreateHttp() => new(new ResilientHttpHandler(_mirror))
+    {
+        // 超时由分片/单流的独立 CTS 控制(慢速连接下大分片可能超过 HttpClient 默认 100s)
+        Timeout = Timeout.InfiniteTimeSpan,
+    };
 
     /// <summary>线程安全的字节进度聚合器。</summary>
     private sealed class ByteCounter
@@ -109,14 +113,40 @@ public class DownloadEngine
         return (0, false);
     }
 
+    /// <summary>按精确字节数读取并写入,不依赖流结束符(CDN 长连接可能永远不给 EOF)。</summary>
+    private static async Task CopyExactlyAsync(
+        Stream source, Stream target, long count, CancellationToken ct)
+    {
+        var buffer = new byte[1 << 16];
+        long remaining = count;
+        while (remaining > 0)
+        {
+            var toRead = (int)Math.Min(buffer.Length, remaining);
+            var read = await source.ReadAsync(buffer.AsMemory(0, toRead), ct);
+            if (read <= 0)
+                throw new IOException("流在读取期望字节数前结束");
+            await target.WriteAsync(buffer.AsMemory(0, read), ct);
+            remaining -= read;
+        }
+    }
+
     private static async Task DownloadSingleStreamAsync(
         HttpClient http, string url, string partPath, CancellationToken ct)
     {
-        using var response = await http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct);
+        // 独立超时:挂起的响应体会永久阻塞,这里整体限制 10 分钟
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeoutCts.CancelAfter(TimeSpan.FromMinutes(10));
+
+        using var response = await http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, timeoutCts.Token);
         response.EnsureSuccessStatusCode();
-        await using var source = await response.Content.ReadAsStreamAsync(ct);
+        var contentLength = response.Content.Headers.ContentLength;
+        await using var source = await response.Content.ReadAsStreamAsync(timeoutCts.Token);
         await using var target = new FileStream(partPath, FileMode.Create, FileAccess.Write, FileShare.None, 1 << 20);
-        await source.CopyToAsync(target, 1 << 20, ct);
+
+        if (contentLength is > 0)
+            await CopyExactlyAsync(source, target, contentLength.Value, timeoutCts.Token);
+        else
+            await source.CopyToAsync(target, 1 << 20, timeoutCts.Token);
     }
 
     private async Task DownloadChunkedAsync(
@@ -162,18 +192,21 @@ public class DownloadEngine
     {
         for (var attempt = 0; attempt < 3; attempt++)
         {
+            // 每次尝试独立超时:按慢速连接(约 28KB/s)下满一个 4MiB 分片也需 <10 分钟
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            timeoutCts.CancelAfter(TimeSpan.FromMinutes(10));
             try
             {
                 using var request = new HttpRequestMessage(HttpMethod.Get, url);
                 request.Headers.Range = new System.Net.Http.Headers.RangeHeaderValue(start, end);
-                using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
+                using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, timeoutCts.Token);
                 response.EnsureSuccessStatusCode();
 
-                await using var source = await response.Content.ReadAsStreamAsync(ct);
+                await using var source = await response.Content.ReadAsStreamAsync(timeoutCts.Token);
                 await using var target = new FileStream(
                     partPath, FileMode.Open, FileAccess.Write, FileShare.Write, 1 << 16);
                 target.Seek(start, SeekOrigin.Begin);
-                await source.CopyToAsync(target, 1 << 16, ct);
+                await CopyExactlyAsync(source, target, end - start + 1, timeoutCts.Token);
 
                 // 校验分片实际写入长度
                 if (target.Position - start != end - start + 1)
@@ -183,7 +216,7 @@ public class DownloadEngine
             }
             catch (Exception ex) when (
                 attempt < 2 &&
-                ex is HttpRequestException or IOException &&
+                ex is HttpRequestException or IOException or OperationCanceledException &&
                 !ct.IsCancellationRequested)
             {
                 await Task.Delay(500 * (attempt + 1), ct);

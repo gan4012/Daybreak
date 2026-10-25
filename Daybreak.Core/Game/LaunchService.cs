@@ -92,6 +92,17 @@ public class LaunchService
     public MinecraftPath CreateGamePath() =>
         new MinecraftPath(ResolveGameDirectory());
 
+    /// <summary>某版本的 mods 目录(遵循版本隔离:隔离时位于版本文件夹内)。</summary>
+    public string ResolveModsDirectory(string versionId)
+    {
+        var path = ResolvePathForVersion(versionId);
+        return Path.Combine(path.BasePath, "mods");
+    }
+
+    /// <summary>某版本的游戏运行根目录(遵循版本隔离)。</summary>
+    public string ResolveGameRootForVersion(string versionId) =>
+        ResolvePathForVersion(versionId).BasePath;
+
     /// <summary>
     /// 解析某版本的 MinecraftPath。开启版本隔离时:游戏运行目录(saves/config 等)在版本文件夹内,
     /// 而 versions/libraries/assets/runtime 仍指向共享位置,避免重复下载。
