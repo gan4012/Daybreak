@@ -37,7 +37,8 @@ public partial class MultiplayerPage : Page
 
         ViewModel.SelectedTabIndex = TabServers.IsChecked == true ? 0
             : TabList.IsChecked == true ? 1
-            : 2;
+            : TabLan.IsChecked == true ? 2
+            : 3;
     }
 
     // ===== 我的服务端 =====

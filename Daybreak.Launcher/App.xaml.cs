@@ -48,6 +48,11 @@ public partial class App : Application
     {
         LogSetup.Initialize();
 
+        // 记录提权状态:联机功能依赖管理员权限，出问题时这一行是最关键的排查依据
+        Log.Information("启动器启动 — 管理员权限: {Elevated},联机组件: {Component}",
+            Services.ElevationService.IsElevated ? "是" : "否",
+            Core.Net.EasyTierManager.IsInstalled ? "已就位" : "缺失");
+
         var config = Core.Storage.LauncherConfig.Load();
         Services.ThemeService.ApplyThemeMode(config.ThemeMode, config.Backdrop);
 

@@ -16,3 +16,12 @@ updater-tmp/
 app.png
 TestResults/
 *.trx
+
+# EasyTier 二进制不进 git(约 24MB),只保留许可证与说明文本。
+# scripts/package.ps1 会在打包前自动检测/下载。
+third_party/easytier/*.exe
+third_party/easytier/*.dll
+third_party/easytier/*.sys
+
+# 中继节点地址:不进 git,避免公开仓库里公示自建服务器
+third_party/easytier/relay.txt

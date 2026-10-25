@@ -16,6 +16,51 @@ $outDir = Join-Path $root "publish-beta"
 # 导致自更新器按文件名匹配资产失败
 $zipName = "Daybreak-beta-win-x64.zip"
 
+# ---- EasyTier 联机组件 ----
+# 二进制不进 git(约 24MB),新克隆的仓库里 third_party/easytier 只有许可证文本。
+# 这里负责在打包前补齐,否则打出来的包缺失联机功能。
+$etDir = Join-Path $root "third_party\easytier"
+$etCore = Join-Path $etDir "easytier-core.exe"
+$etVersion = "v2.6.4"
+
+if (-not (Test-Path $etCore)) {
+    Write-Host "==> 缺少 EasyTier 组件,自动下载 $etVersion" -ForegroundColor Yellow
+    New-Item -ItemType Directory -Path $etDir -Force | Out-Null
+
+    $zipUrl = "https://github.com/EasyTier/EasyTier/releases/download/$etVersion/easytier-windows-x86_64-$etVersion.zip"
+    $tmpZip = Join-Path $env:TEMP "easytier-$etVersion.zip"
+    $tmpDir = Join-Path $env:TEMP "easytier-extract-$etVersion"
+
+    try {
+        # GitHub 在国内不稳,失败时走镜像
+        $mirrors = @($zipUrl, "https://gh-proxy.com/$zipUrl", "https://ghfast.top/$zipUrl")
+        $downloaded = $false
+        foreach ($u in $mirrors) {
+            try {
+                Invoke-WebRequest -Uri $u -OutFile $tmpZip -TimeoutSec 180 -UseBasicParsing `
+                    -Headers @{ "User-Agent" = "Daybreak-Build" }
+                if ((Get-Item $tmpZip).Length -gt 10MB) { $downloaded = $true; break }
+            } catch { }
+        }
+        if (-not $downloaded) { throw "所有下载源均失败" }
+
+        if (Test-Path $tmpDir) { Remove-Item $tmpDir -Recurse -Force }
+        Expand-Archive -Path $tmpZip -DestinationPath $tmpDir -Force
+
+        $srcDir = Get-ChildItem $tmpDir -Recurse -Filter "easytier-core.exe" | Select-Object -First 1 -ExpandProperty DirectoryName
+        foreach ($f in @("easytier-core.exe", "wintun.dll", "WinDivert64.sys", "Packet.dll")) {
+            $src = Join-Path $srcDir $f
+            if (Test-Path $src) { Copy-Item $src $etDir -Force }
+        }
+        Write-Host "    EasyTier 组件已就位" -ForegroundColor Green
+    } catch {
+        throw "EasyTier 组件下载失败:$_`n请手动把 easytier-core.exe / wintun.dll / WinDivert64.sys / Packet.dll 放到 third_party\easytier\"
+    } finally {
+        Remove-Item $tmpZip -Force -ErrorAction SilentlyContinue
+        Remove-Item $tmpDir -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+
 if (Test-Path $outDir) { Remove-Item $outDir -Recurse -Force }
 
 Write-Host "==> dotnet publish (self-contained: $SelfContained)" -ForegroundColor Cyan
@@ -28,6 +73,31 @@ dotnet publish Daybreak.Launcher -c Release -r win-x64 `
     -o $outDir
 
 if ($LASTEXITCODE -ne 0) { throw "publish 失败" }
+
+# ---- 显式复制 EasyTier 组件 ----
+# 不依赖 csproj 的 Content:单文件发布时 .dll 会被当成 native 库打进单文件、
+# .exe/.sys 也未必按 Content 复制,实测 publish 目录里只剩 .txt。
+# 这里直接从源目录复制，结果最确定。
+$etOut = Join-Path $outDir "easytier"
+if (Test-Path $etDir) {
+    New-Item -ItemType Directory -Path $etOut -Force | Out-Null
+    foreach ($f in @("easytier-core.exe", "wintun.dll", "WinDivert64.sys", "Packet.dll",
+                     "LICENSE-EasyTier-LGPL-3.0.txt", "README-EasyTier.txt", "relay.txt")) {
+        $src = Join-Path $etDir $f
+        if (Test-Path $src) { Copy-Item $src $etOut -Force }
+    }
+    $etFiles = (Get-ChildItem $etOut -File | Measure-Object).Count
+    Write-Host "    EasyTier 组件已复制($etFiles 个文件)" -ForegroundColor Green
+    if (-not (Test-Path (Join-Path $etOut "easytier-core.exe"))) {
+        throw "EasyTier 组件复制失败:publish 目录里没有 easytier-core.exe"
+    }
+    # relay.txt 含自建节点地址,不进 git,但必须进包,否则联机功能用不了
+    if (-not (Test-Path (Join-Path $etOut "relay.txt"))) {
+        throw "缺少 third_party\easytier\relay.txt(内容为一行 host:port)。该文件不进 git,需在本地创建后再打包。"
+    }
+} else {
+    throw "找不到 $etDir"
+}
 
 # 独立更新器:与主程序同目录,包内需带 Daybreak.Updater.exe 否则「检查更新」失效
 Write-Host "==> dotnet publish 更新器" -ForegroundColor Cyan
@@ -106,7 +176,15 @@ Write-Host "==> 同步发行目录 $releaseDir" -ForegroundColor Cyan
 New-Item -ItemType Directory -Path $releaseDir -Force | Out-Null
 
 # 只放运行需要的:主程序、更新器、说明。不带 pdb,避免用户困惑
-foreach ($name in @("Daybreak.Launcher.exe", "Daybreak.Updater.exe", "使用说明.txt")) {
+# 联机组件目录也要同步(否则发行目录里的程序找不到 easytier-core)
+    $etSrc = Join-Path $outDir "easytier"
+    $etDst = Join-Path $releaseDir "easytier"
+    if (Test-Path $etSrc) {
+        if (Test-Path $etDst) { Remove-Item $etDst -Recurse -Force }
+        Copy-Item $etSrc $etDst -Recurse -Force
+    }
+
+    foreach ($name in @("Daybreak.Launcher.exe", "Daybreak.Updater.exe", "使用说明.txt")) {
     $src = Join-Path $outDir $name
     if (Test-Path $src) {
         Copy-Item $src $releaseDir -Force

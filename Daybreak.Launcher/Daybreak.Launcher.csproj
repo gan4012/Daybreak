@@ -1,8 +1,27 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
     <ProjectReference Include="..\Daybreak.Core\Daybreak.Core.csproj" />
     <ProjectReference Include="..\Daybreak.Market\Daybreak.Market.csproj" />
+  </ItemGroup>
+
+  <!--
+    EasyTier 联机组件随程序分发,输出到 easytier/ 子目录。
+    以独立子进程方式调用(不链接),符合其 LGPL-3.0 要求。
+    .exe/.dll/.sys 不进 git(见 .gitignore),由 scripts/package.ps1 保证存在;
+    本地开发若缺失,联机页会明确提示"组件缺失"而不是静默失败。
+  -->
+  <ItemGroup>
+    <Content Include="..\third_party\easytier\**\*">
+      <Link>easytier\%(RecursiveDir)%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <!--
+        必须同时设 CopyToPublishDirectory:只设 CopyToOutputDirectory 时,
+        单文件发布(dotnet publish -p:PublishSingleFile=true)只带出了 .txt,
+        exe/dll/sys 全丢 —— 打出来的包看起来正常,但联机功能直接不能用。
+      -->
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
   </ItemGroup>
 
   <ItemGroup>

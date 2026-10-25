@@ -30,6 +30,14 @@
                 </DataTrigger>
             </Style.Triggers>
         </Style>
+        <Style x:Key="RoomTabPanel" TargetType="Grid">
+            <Setter Property="Visibility" Value="Collapsed" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsRoomTab}" Value="True">
+                    <Setter Property="Visibility" Value="Visible" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
     </Page.Resources>
 
     <Grid Margin="32,28,32,24">
@@ -57,6 +65,8 @@
             <RadioButton x:Name="TabList" Content="服务器列表" GroupName="MpTabs"
                          MinHeight="34" Padding="16,4" Margin="10,0,0,0" Checked="OnTabChanged" />
             <RadioButton x:Name="TabLan" Content="局域网" GroupName="MpTabs"
+                         MinHeight="34" Padding="16,4" Margin="10,0,0,0" Checked="OnTabChanged" />
+            <RadioButton x:Name="TabRoom" Content="好友联机" GroupName="MpTabs"
                          MinHeight="34" Padding="16,4" Margin="10,0,0,0" Checked="OnTabChanged" />
         </StackPanel>
 
@@ -531,6 +541,186 @@
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
+                    </StackPanel>
+                </ScrollViewer>
+            </Grid>
+
+            <!-- ===== Tab 3:好友联机(EasyTier 虚拟组网) ===== -->
+            <Grid Style="{StaticResource RoomTabPanel}">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel>
+
+                        <!-- 组件缺失提示 -->
+                        <Border CornerRadius="10" Background="#2ACF6B6B" Padding="14,10" Margin="0,0,0,12">
+                            <Border.Style>
+                                <Style TargetType="Border">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsRoomComponentReady}" Value="False">
+                                            <Setter Property="Visibility" Value="Visible" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
+                            <StackPanel Orientation="Horizontal">
+                                <ui:SymbolIcon Symbol="Warning24" FontSize="16" VerticalAlignment="Top" />
+                                <TextBlock Text="{Binding RoomComponentHint}" FontSize="12"
+                                           TextWrapping="Wrap" Margin="8,0,0,0" />
+                            </StackPanel>
+                        </Border>
+
+                        <!-- 未进房间:创建/加入 -->
+                        <Border Padding="20,18">
+                            <Border.Style>
+                                <Style TargetType="Border" BasedOn="{StaticResource GlassCard}">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding ShowRoomSetup}" Value="True">
+                                            <Setter Property="Visibility" Value="Visible" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
+                            <StackPanel>
+                                <TextBlock Text="好友联机" FontSize="16" FontWeight="SemiBold" />
+                                <TextBlock
+                                    Text="点「创建房间」拿到 6 位房间号,好友在他的启动器里输入房间号即可加入。不需要公网 IP,跨网络也能连。"
+                                    FontSize="12" Opacity="0.7" TextWrapping="Wrap" Margin="0,6,0,0" />
+
+                                <TextBlock Text="你正在玩的版本" FontSize="13" FontWeight="SemiBold" Margin="0,16,0,0" />
+                                <TextBlock Text="双方版本(含 Mod)必须一致,否则进不去。"
+                                           FontSize="11.5" Opacity="0.6" Margin="0,2,0,0" />
+                                <ComboBox ItemsSource="{Binding RoomGameVersions}"
+                                          SelectedItem="{Binding SelectedRoomVersion}"
+                                          MinHeight="34" Margin="0,6,0,0" MaxWidth="320" HorizontalAlignment="Left" />
+
+                                <StackPanel Orientation="Horizontal" Margin="0,18,0,0">
+                                    <ui:Button Icon="{ui:SymbolIcon Add24}" Content="创建房间"
+                                               MinHeight="38" MinWidth="140"
+                                               Style="{StaticResource BrandPrimaryButton}"
+                                               Command="{Binding CreateRoomCommand}" />
+                                    <TextBlock Text="或" FontSize="12" Opacity="0.5"
+                                               VerticalAlignment="Center" Margin="16,0" />
+                                    <ui:TextBox Text="{Binding RoomCodeInput, UpdateSourceTrigger=PropertyChanged}"
+                                                MinHeight="38" Width="150" MaxLength="6"
+                                                PlaceholderText="6 位房间号" />
+                                    <ui:Button Icon="{ui:SymbolIcon PlugConnected24}" Content="加入房间"
+                                               MinHeight="38" Margin="10,0,0,0"
+                                               Command="{Binding JoinRoomCommand}" />
+                                </StackPanel>
+
+                                <TextBlock Text="提示:房间号相当于密码,建议只告诉自己人;直播/录屏时注意遮挡。"
+                                           FontSize="11.5" Opacity="0.55" TextWrapping="Wrap" Margin="0,16,0,0" />
+                            </StackPanel>
+                        </Border>
+
+                        <!-- 已在房间 -->
+                        <StackPanel>
+                            <StackPanel.Style>
+                                <Style TargetType="StackPanel">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsInRoom}" Value="True">
+                                            <Setter Property="Visibility" Value="Visible" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </StackPanel.Style>
+
+                            <Border Style="{StaticResource GlassCard}" Padding="20,18">
+                                <StackPanel>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0">
+                                            <TextBlock Text="房间号" FontSize="12" Opacity="0.6" />
+                                            <TextBlock Text="{Binding CurrentRoomCode}" FontSize="34"
+                                                       FontWeight="SemiBold" FontFamily="Consolas"
+                                                       Foreground="{StaticResource BrandAccentBrush}" />
+                                        </StackPanel>
+                                        <ui:Button Grid.Column="1" Icon="{ui:SymbolIcon Copy24}" Content="复制"
+                                                   MinHeight="34" VerticalAlignment="Center"
+                                                   Command="{Binding CopyRoomCodeCommand}" />
+                                    </Grid>
+
+                                    <Grid Margin="0,14,0,0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Ellipse Grid.Column="0" Width="9" Height="9" VerticalAlignment="Center">
+                                            <Ellipse.Style>
+                                                <Style TargetType="Ellipse">
+                                                    <Setter Property="Fill" Value="#8A8A8A" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding RoomPeerCount}" Value="0">
+                                                            <Setter Property="Fill" Value="#E8C27A" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Ellipse.Style>
+                                        </Ellipse>
+                                        <TextBlock Grid.Column="1" Margin="8,0,0,0" FontSize="12" Opacity="0.8"
+                                                   VerticalAlignment="Center" Text="{Binding RoomStatusText}" />
+                                    </Grid>
+
+                                    <TextBlock FontSize="12" Opacity="0.7" Margin="0,12,0,0" TextWrapping="Wrap">
+                                        <Run Text="游戏版本:" />
+                                        <Run Text="{Binding RoomGameVersion, Mode=OneWay}" />
+                                        <Run Text="  ·  已连接好友:" />
+                                        <Run Text="{Binding RoomPeerCount, Mode=OneWay}" />
+                                        <Run Text=" 人" />
+                                    </TextBlock>
+
+                                    <!-- 好友要填的地址 -->
+                                    <Border CornerRadius="8" Background="#1AFFFFFF" Padding="12,10" Margin="0,14,0,0">
+                                        <StackPanel>
+                                            <TextBlock Text="好友在游戏「直接连接」里输入" FontSize="11.5" Opacity="0.65" />
+                                            <TextBlock Text="{Binding RoomHostAddress}" FontSize="15"
+                                                       FontFamily="Consolas" Margin="0,4,0,0"
+                                                       Foreground="{StaticResource BrandAccentBrush}" />
+                                            <TextBlock Text="(点下面的「启动游戏并进服」就不用自己输了)"
+                                                       FontSize="11" Opacity="0.5" Margin="0,4,0,0" />
+                                        </StackPanel>
+                                    </Border>
+
+                                    <StackPanel Orientation="Horizontal" Margin="0,16,0,0">
+                                        <ui:Button Icon="{ui:SymbolIcon Play24}" Content="启动游戏并进服"
+                                                   MinHeight="38" MinWidth="170"
+                                                   Style="{StaticResource BrandPrimaryButton}"
+                                                   Command="{Binding JoinRoomGameCommand}" />
+                                        <Button Content="结束联机" MinHeight="38" Padding="18,4"
+                                                Margin="10,0,0,0"
+                                                Command="{Binding LeaveRoomCommand}" />
+                                    </StackPanel>
+
+                                    <TextBlock
+                                        Text="⚠ 请确认好友使用与你完全相同的游戏版本与 Mod,否则会连接失败。"
+                                        FontSize="11.5" Opacity="0.7" TextWrapping="Wrap" Margin="0,14,0,0" />
+                                </StackPanel>
+                            </Border>
+
+                            <!-- 联机日志 -->
+                            <Border Style="{StaticResource GlassCard}" Padding="14,12" Margin="0,12,0,0">
+                                <StackPanel>
+                                    <TextBlock Text="联机日志" FontSize="13" FontWeight="SemiBold" />
+                                    <Border CornerRadius="8" Background="#22000000" Margin="0,8,0,0">
+                                        <TextBox Text="{Binding RoomLogText, Mode=OneWay}"
+                                                 IsReadOnly="True" FontFamily="Consolas" FontSize="11"
+                                                 Foreground="#D8FFFFFF" Background="Transparent"
+                                                 BorderThickness="0" Padding="10,8"
+                                                 TextWrapping="NoWrap" AcceptsReturn="True"
+                                                 Height="120"
+                                                 VerticalScrollBarVisibility="Auto"
+                                                 HorizontalScrollBarVisibility="Auto"
+                                                 IsUndoEnabled="False" />
+                                    </Border>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+
                     </StackPanel>
                 </ScrollViewer>
             </Grid>

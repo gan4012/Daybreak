@@ -48,3 +48,10 @@ Daybreak 破晓启动器基于以下开源组件构建。全部为 MIT / Apache-
 - 本项目为**自主实现**:未参考、未复制任何闭源 Minecraft 启动器的代码、UI 资源、图标或文案。
 - 所有引用的开源组件均保持原样使用(未修改源码)。
 - 完整许可证文本可在对应项目的官方仓库中查阅。
+
+## 随包分发的第三方组件
+
+| 组件 | 许可证 | 说明 |
+|---|---|---|
+| EasyTier (easytier-core.exe 等) | **LGPL-3.0**(早期版本为 Apache-2.0) | 好友联机(虚拟组网)。位于发布包的 easytier/ 目录，以**独立子进程**方式调用，不链接、不修改源码；用户可自行替换该目录下的 exe。完整许可证文本见 easytier/LICENSE-EasyTier-LGPL-3.0.txt。上游：https://github.com/EasyTier/EasyTier |
+| wintun.dll / WinDivert64.sys / Packet.dll | 随 EasyTier 发行版分发 | EasyTier 创建虚拟网卡与抓包所需，同上遵循 EasyTier 的许可条款 |

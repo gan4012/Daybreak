@@ -181,16 +181,18 @@ public partial class MultiplayerViewModel : ObservableObject
     [ObservableProperty]
     private int _selectedTabIndex;
 
-    // 以下三个属性供 XAML 的 DataTrigger 使用(项目里没有 Converter,统一走 DataTrigger)
+    // 以下属性供 XAML 的 DataTrigger 使用(项目里没有 Converter,统一走 DataTrigger)
     public bool IsServersTab => SelectedTabIndex == 0;
     public bool IsListTab => SelectedTabIndex == 1;
     public bool IsLanTab => SelectedTabIndex == 2;
+    public bool IsRoomTab => SelectedTabIndex == 3;
 
     partial void OnSelectedTabIndexChanged(int value)
     {
         OnPropertyChanged(nameof(IsServersTab));
         OnPropertyChanged(nameof(IsListTab));
         OnPropertyChanged(nameof(IsLanTab));
+        OnPropertyChanged(nameof(IsRoomTab));
     }
 
     [ObservableProperty]
@@ -262,6 +264,10 @@ public partial class MultiplayerViewModel : ObservableObject
         RefreshSavedServers();
         StartLogTimer();
 
+        // 好友联机(EasyTier 房间)初始化
+        InitializeRoomFeature();
+        RefreshRoomGameVersions();
+
         // 类型变更会重新拉版本列表,进入页面时先把当前类型的版本拉好
         _ = LoadVersionsForTypeAsync();
     }
@@ -306,6 +312,9 @@ public partial class MultiplayerViewModel : ObservableObject
 
         // 局域网监听也要一并释放,否则退出时会占着 UDP 4445
         StopLanScanIfRunning();
+
+        // 联机组件(EasyTier)也要清理,否则会留下虚拟网卡
+        await ShutdownRoomAsync();
     }
 
     private LaunchService GetLaunchService() =>
@@ -331,6 +340,9 @@ public partial class MultiplayerViewModel : ObservableObject
         {
             foreach (var server in Servers)
                 server.FlushLog();
+
+            // 房间日志也走同一个节流器
+            FlushRoomLog();
         };
         _logTimer.Start();
     }
