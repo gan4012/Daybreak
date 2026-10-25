@@ -22,6 +22,10 @@ public partial class MultiplayerPage : Page
     {
         InitializeComponent();
         DataContext = App.GetService<MultiplayerViewModel>();
+
+        // 单例 VM:每次进入页面都要重新同步服务端状态并重新挂事件,
+        // 否则切走再回来会显示成"已停止"(其实服务端还在跑)。
+        Loaded += (_, _) => ViewModel.OnNavigatedTo();
     }
 
     // ===== Tab =====
@@ -105,6 +109,8 @@ public partial class MultiplayerPage : Page
         ViewModel.JoinLanWorldCommand.Execute(world);
     }
 
-    /// <summary>页面卸载时停掉后台监听,避免一直占着 UDP 4445。</summary>
-    private void OnUnloaded(object sender, RoutedEventArgs e) => ViewModel.Cleanup();
+    // 注意:这里**故意不做** Unloaded 清理。
+    // MultiplayerViewModel 是单例,页面切走时服务端可能仍在运行、局域网可能仍在监听,
+    // 卸载就 Cleanup 会把还在用的东西一起停掉(这正是"切页面服务端就停"的成因之一)。
+    // 局域网监听由用户在界面上手动开关,应用退出时由 App.OnExit 统一收尾。
 }

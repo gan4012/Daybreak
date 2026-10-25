@@ -68,6 +68,40 @@ public partial class ServerItemViewModel : ObservableObject
         _ => "#8A8A8A",
     };
 
+    /// <summary>当前已订阅的进程(防止重复挂接导致日志打印多份)。</summary>
+    private ServerProcess? _attachedProcess;
+
+    /// <summary>
+    /// 把该项挂到服务端进程上。**幂等**:已经挂过同一个进程时返回 false,
+    /// 避免切页面回来时重复订阅造成日志重复。
+    /// </summary>
+    public bool AttachTo(ServerProcess process)
+    {
+        if (ReferenceEquals(_attachedProcess, process))
+            return false;
+
+        _attachedProcess = process;
+
+        process.StateChanged += e =>
+        {
+            System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+            {
+                State = e.State;
+                StateText = e.Message ?? DescribeState(e.State);
+            });
+        };
+
+        return true;
+    }
+
+    private static string DescribeState(ServerState state) => state switch
+    {
+        ServerState.Running => "运行中",
+        ServerState.Starting => "启动中…",
+        ServerState.Stopping => "停止中…",
+        _ => "已停止",
+    };
+
     /// <summary>缓冲一行日志。调用方必须自己节流(不要每行都触发 UI 刷新)。</summary>
     public void AppendLog(string line)
     {
@@ -228,11 +262,50 @@ public partial class MultiplayerViewModel : ObservableObject
         RefreshSavedServers();
         StartLogTimer();
 
-        // 局域网扫描默认不自动开(会绑定 4445 端口),由用户点按钮启动
-        StatusText = "提示:开服前请先确认已同意 EULA;联机请保持正版验证开启。";
-
         // 类型变更会重新拉版本列表,进入页面时先把当前类型的版本拉好
         _ = LoadVersionsForTypeAsync();
+    }
+
+    /// <summary>
+    /// 每次进入联机页时调用。
+    ///
+    /// 单例 VM 下这一步很关键:页面切走期间服务端可能一直在跑,
+    /// 回来时必须重新同步状态、重新挂事件,否则会显示成"已停止"。
+    /// </summary>
+    public void OnNavigatedTo()
+    {
+        EnsureManagerMatchesConfig();
+        RefreshServers();
+
+        // 服务端在跑但端口检测说被占用是正常的(就是它自己占的),
+        // 这里重算一次,避免用旧快照把运行中的服务端标成"端口冲突"
+        foreach (var item in Servers)
+            item.PortInUse = !item.IsRunning && ServerManager.IsPortInUse(item.Port);
+
+        StatusText = Servers.Count == 0
+            ? "还没有服务端。点「新建服务端」创建一个,或去「服务器列表」添加别人的服务器。"
+            : $"共 {Servers.Count} 个服务端" +
+              (Servers.Any(s => s.IsRunning) ? $",{Servers.Count(s => s.IsRunning)} 个运行中" : "");
+    }
+
+    /// <summary>应用退出时统一收尾:停掉本启动器托管的所有服务端,避免留下孤儿 Java 进程。</summary>
+    public async Task ShutdownAsync()
+    {
+        _logTimer?.Stop();
+        _logTimer = null;
+
+        try
+        {
+            if (_serverManager is not null)
+                await _serverManager.StopAllAsync();
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "退出时停止服务端失败");
+        }
+
+        // 局域网监听也要一并释放,否则退出时会占着 UDP 4445
+        StopLanScanIfRunning();
     }
 
     private LaunchService GetLaunchService() =>
@@ -268,28 +341,99 @@ public partial class MultiplayerViewModel : ObservableObject
     private void RefreshServers()
     {
         var manager = GetServerManager();
-        Servers.Clear();
 
-        foreach (var instance in manager.List())
+        // 保留已有项:直接重建会丢掉控制台日志,而且会把事件重复订阅一遍
+        // (重复订阅会导致同一行日志被打印多次)
+        var existing = Servers.ToDictionary(s => s.Name, StringComparer.OrdinalIgnoreCase);
+        var instances = manager.List();
+
+        // 删掉已经不存在的
+        for (var i = Servers.Count - 1; i >= 0; i--)
         {
-            var item = new ServerItemViewModel(instance)
-            {
-                State = manager.GetState(instance.Name),
-                EulaAccepted = EulaService.IsAccepted(manager.ResolveInstanceDirectory(instance.Name)),
-                PortInUse = ServerManager.IsPortInUse(instance.Port),
-            };
-
-            item.StateText = DescribeState(item.State);
-            Servers.Add(item);
+            if (!instances.Any(x => x.Name.Equals(Servers[i].Name, StringComparison.OrdinalIgnoreCase)))
+                Servers.RemoveAt(i);
         }
 
-        // 运行中的服务端要重新挂上日志与状态事件
+        for (var i = 0; i < instances.Count; i++)
+        {
+            var instance = instances[i];
+            var state = manager.GetState(instance.Name);
+            var eula = EulaService.IsAccepted(manager.ResolveInstanceDirectory(instance.Name));
+            var portInUse = ServerManager.IsPortInUse(instance.Port);
+
+            if (existing.TryGetValue(instance.Name, out var item))
+            {
+                // 复用旧项:状态与日志都留着,只刷新会变的环境信息
+                item.State = state;
+                item.StateText = DescribeState(state);
+                item.EulaAccepted = eula;
+                item.PortInUse = portInUse;
+
+                var currentIndex = Servers.IndexOf(item);
+                if (currentIndex != i)
+                    Servers.Move(currentIndex, i);
+            }
+            else
+            {
+                item = new ServerItemViewModel(instance)
+                {
+                    State = state,
+                    StateText = DescribeState(state),
+                    EulaAccepted = eula,
+                    PortInUse = portInUse,
+                };
+
+                if (i < Servers.Count)
+                    Servers.Insert(i, item);
+                else
+                    Servers.Add(item);
+            }
+        }
+
+        // 关键:回到本页时,仍在运行的服务端要重新挂上日志与状态事件,
+        // 否则控制台会"空白"、状态也不会再更新(单例 VM 下进程是活的,只是没订阅)
         foreach (var item in Servers.Where(s => s.IsRunning))
             AttachProcess(item);
+    }
 
-        StatusText = Servers.Count == 0
-            ? "还没有服务端。点「新建服务端」创建一个,或去「服务器列表」添加别人的服务器。"
-            : $"共 {Servers.Count} 个服务端";
+    /// <summary>把服务端进程的日志/状态事件挂到 UI 项上(幂等:同一项只挂一次)。</summary>
+    private void AttachProcess(ServerItemViewModel item)
+    {
+        var process = GetServerManager().GetProcess(item.Name);
+        if (process is null)
+            return;
+
+        if (!item.AttachTo(process))
+            return;
+
+        process.OutputReceived += item.AppendLog;
+    }
+
+    /// <summary>确认服务端管理器仍指向当前配置(设置页改了游戏目录/镜像后要跟着换)。</summary>
+    private void EnsureManagerMatchesConfig()
+    {
+        var current = LauncherConfig.Load();
+        var gameDirChanged = !string.Equals(current.GameDirectory, _config.GameDirectory, StringComparison.OrdinalIgnoreCase);
+        var mirrorChanged = !string.Equals(current.Mirror, _config.Mirror, StringComparison.OrdinalIgnoreCase);
+
+        if (!gameDirChanged && !mirrorChanged)
+            return;
+
+        // 先停掉旧管理器托管的服务端,避免换目录后留下管不到的孤儿进程
+        try
+        {
+            _serverManager?.StopAllAsync().GetAwaiter().GetResult();
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "切换配置时停止旧服务端失败");
+        }
+
+        _config.GameDirectory = current.GameDirectory;
+        _config.Mirror = current.Mirror;
+        _launchService = null;
+        _serverManager = null;
+        _serverListService = null;
     }
 
     private static string DescribeState(ServerState state) => state switch
@@ -299,23 +443,6 @@ public partial class MultiplayerViewModel : ObservableObject
         ServerState.Stopping => "停止中…",
         _ => "已停止",
     };
-
-    private void AttachProcess(ServerItemViewModel item)
-    {
-        var process = GetServerManager().GetProcess(item.Name);
-        if (process is null)
-            return;
-
-        process.OutputReceived += item.AppendLog;
-        process.StateChanged += e =>
-        {
-            System.Windows.Application.Current?.Dispatcher.Invoke(() =>
-            {
-                item.State = e.State;
-                item.StateText = e.Message ?? DescribeState(e.State);
-            });
-        };
-    }
 
     [RelayCommand]
     private async Task StartServerAsync(ServerItemViewModel? item)
@@ -1090,12 +1217,14 @@ public partial class MultiplayerViewModel : ObservableObject
         _ = JoinServerAsync(temp);
     }
 
-    /// <summary>页面离开时停止后台监听,避免常驻占用端口。</summary>
-    public void Cleanup()
+    /// <summary>
+    /// 局域网监听交由用户手动开关(见 ToggleLanScan),**不随页面卸载自动停**——
+    /// 之前那样做会在切页面时把还在用的监听一起停掉。
+    /// 应用退出时由 ShutdownAsync 统一收尾。
+    /// </summary>
+    public void StopLanScanIfRunning()
     {
-        _logTimer?.Stop();
-        _logTimer = null;
-
-        StopLanScan();
+        if (IsLanScanning)
+            StopLanScan();
     }
 }

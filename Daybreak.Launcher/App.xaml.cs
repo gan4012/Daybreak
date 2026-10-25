@@ -18,10 +18,17 @@ public partial class App : Application
             services.AddSingleton<SettingsViewModel>();
             services.AddSingleton<AuthViewModel>();
             services.AddTransient<HomeViewModel>();
-            services.AddTransient<DownloadViewModel>();
+
+            // DownloadViewModel / MultiplayerViewModel 必须是单例:
+            // 它们持有"跨页面存活的任务"(下载进度、正在运行的服务端进程与日志)。
+            // 注册成 Transient 时,切走再切回来会拿到一个全新 VM——
+            // 表现为「服务端显示已停止(其实还在跑)、再点启动报端口被占用」
+            // 以及「下载切个页面就'停了'」。
+            services.AddSingleton<DownloadViewModel>();
+            services.AddSingleton<MultiplayerViewModel>();
+
             services.AddTransient<VersionsViewModel>();
             services.AddTransient<ModsViewModel>();
-            services.AddTransient<MultiplayerViewModel>();
             services.AddSingleton<MainWindow>();
             services.AddTransient<Views.Pages.HomePage>();
             services.AddTransient<Views.Pages.DownloadPage>();
@@ -80,6 +87,19 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
+        // 单例 VM 托管的服务端与局域网监听必须在这里收尾,
+        // 否则启动器退出后会留下孤儿 Java 进程占着端口
+        try
+        {
+            GetService<ViewModels.MultiplayerViewModel>()
+                .ShutdownAsync()
+                .Wait(TimeSpan.FromSeconds(15));
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "退出时清理联机资源失败");
+        }
+
         AppHost.StopAsync(TimeSpan.FromSeconds(3)).GetAwaiter().GetResult();
         Log.CloseAndFlush();
         base.OnExit(e);

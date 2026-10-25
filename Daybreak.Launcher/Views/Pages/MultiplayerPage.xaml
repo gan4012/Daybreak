@@ -2,8 +2,7 @@
     x:Class="Daybreak.Launcher.Views.Pages.MultiplayerPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
-    Unloaded="OnUnloaded">
+    xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml">
 
     <!-- 页面级样式:用 DataTrigger 控制可见性(本项目不使用 Converter,统一走 DataTrigger) -->
     <Page.Resources>
