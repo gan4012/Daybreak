@@ -32,3 +32,6 @@ website/_preview/
 
 # 图标生成的预览帧(可由 scripts/make-icon.py 重新导出)
 **/_icon-preview/
+
+# 分发包的校验文件属于构建产物
+*.sha256
