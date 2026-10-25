@@ -39,6 +39,16 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
+    <!--
+      应用图标。由 scripts/make-icon.py 生成(多尺寸 16~256)。
+      设置这一项后,exe 图标、任务栏、标题栏、Alt+Tab 都会跟着变。
+    -->
+    <ApplicationIcon>daybreak.ico</ApplicationIcon>
   </PropertyGroup>
+
+  <!-- 图标文件要让 WPF 也能取到(窗口 Icon 绑定用) -->
+  <ItemGroup>
+    <Resource Include="daybreak.ico" />
+  </ItemGroup>
 
 </Project>

@@ -11,6 +11,7 @@
     MinHeight="640"
     WindowStartupLocation="CenterScreen"
     WindowBackdropType="Acrylic"
+    Icon="daybreak.ico"
     ExtendsContentIntoTitleBar="True">
 
     <Window.Resources>

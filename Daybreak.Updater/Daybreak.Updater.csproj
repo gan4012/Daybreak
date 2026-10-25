@@ -15,4 +15,8 @@
     <TrimMode>partial</TrimMode>
   </PropertyGroup>
 
+  <PropertyGroup>
+    <ApplicationIcon>..\Daybreak.Launcher\daybreak.ico</ApplicationIcon>
+  </PropertyGroup>
+
 </Project>
