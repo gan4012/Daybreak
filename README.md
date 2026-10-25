@@ -37,12 +37,19 @@
 
 ## 下载
 
-前往 [Releases](https://github.com/gan4012/Daybreak/releases) 下载最新内测包:
+**国内用户推荐走 Gitee**(直连快,无需代理):
 
-- `Daybreak-beta-win-x64.zip` — 自包含单文件,**无需安装 .NET 运行时**
+- 🇨🇳 [Gitee 发行版](https://gitee.com/wergansailikebai/daybreak/releases) — 国内直连,实测约 1.5 MB/s
+- 🌐 [GitHub Releases](https://github.com/gan4012/Daybreak/releases) — 海外或已有代理时使用
+
+下载 `Daybreak-beta-win-x64.zip`:
+
+- 自包含单文件,**无需安装 .NET 运行时**
 - 解压到任意目录,双击 `Daybreak.Launcher.exe` 即可
 
 首次启动游戏会自动下载匹配的 Java 运行时与游戏资源(数百 MB,取决于版本),请耐心等待。
+
+启动器内置更新器:**优先从 Gitee 检查与下载更新**,Gitee 不可用时自动回退 GitHub。
 
 ## 从源码构建
 

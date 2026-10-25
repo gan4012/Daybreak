@@ -122,6 +122,18 @@ Daybreak.slnx(.NET 10 新格式解决方案)
 - **GitHub Release 资产名不能含非 ASCII**:上传时中文会被替换成 `.`
   (实测 `Daybreak-内测包-win-x64.zip` → `Daybreak-.-win-x64.zip`)。发布包名必须全 ASCII,
   否则自更新器按文件名匹配资产会失败。当前包名:`Daybreak-beta-win-x64.zip`。
+- **Gitee 发行版 API 的 4 个坑**(全部实测,处理逻辑见 `scripts/publish-gitee.ps1`):
+  1. `GET /releases/tags/{tag}` 在**发行版不存在时返回 HTTP 200 + 正文 `null`**(不是 404),
+     靠异常判断会误判"已存在"。必须校验返回对象里有没有 `id`。
+  2. `PATCH /releases/{id}` 更新标题/说明时**必须带 `tag_name`**,否则 400 Bad Request。
+  3. JSON 里的中文若直接发 UTF-8 字节,Gitee 会**按 Latin-1 解码成乱码**
+     (`首个内测版` → `é¦ä¸ªåæµç`)。必须转成 `\uXXXX` 纯 ASCII 转义再发。
+     注意:PowerShell 控制台回显乱码但服务端存储正确,别被回显误导,用浏览器/API 原始 JSON 核对。
+  4. 发行版 `assets` 里**没有 `size` 字段**(更新器读 size 需容错),
+     且会自动附加源码包 `{tag}.zip` / `{tag}.tar.gz` —— 匹配资产时不能只看 `.zip` 后缀。
+- **Gitee 资产不支持 Range**:请求带 `Range` 仍返回 200 而非 206,断点续传会退化为重下。
+  实测 Gitee 下载 77MB 稳定 **1.45 MB/s**(53 秒完成,哈希与本地一致);
+  同期 GitHub 直连多次在连接阶段超时。故更新器默认 **Gitee 优先 → GitHub 回退**。
 - **GCM 浏览器授权在国内常超时**:`git push` 走 HTTPS + Git Credential Manager 会报
   `发送请求时出错 / 基础连接已经关闭`,并退回索要密码(GitHub 已不支持密码推送)。
   已改用 SSH,且 `/etc` 级配置写在 `~/.ssh/config`:
@@ -149,15 +161,24 @@ Daybreak.slnx(.NET 10 新格式解决方案)
   - Forge/NeoForge 完整安装未实跑(管线与 Fabric 同,风险低)
   - 微软登录 ClientId 用的是 CmlLib 示例 id,**发布前必须换**(设置页已支持填写自有 ClientId)
 - **M5 进展(2026-10-26 完成)**:
-  - ✅ 仓库:`https://github.com/gan4012/Daybreak`(**已公开**,SSH over 443 推送)
-  - ✅ 发布 CI(`.github/workflows/release.yml`):tag `v*` 触发 → build/test/package → 上传 Release。
+  - ✅ 仓库:GitHub `https://github.com/gan4012/Daybreak`(公开,SSH over 443 推送)
+    + Gitee 镜像 `https://gitee.com/wergansailikebai/daybreak`(公开,HTTPS + 私人令牌推送)
+  - ✅ 发布 CI(`.github/workflows/release.yml`):tag `v*` 触发 → build/test/package → 上传 GitHub Release。
     已实测跑通:CI 5 次全绿、Release 1 次全绿(约 3.5 分钟)
-  - ✅ 首个 Release:`v0.1.0`(包名损坏,已作废)→ `v0.1.1`(包名 `Daybreak-beta-win-x64.zip`)
-  - ✅ 自更新器:`Daybreak.Updater --check / --update`,设置页有「检查更新」按钮;裁剪后 11.5MB
+  - ✅ 发布包双通道:`v0.1.1` 同时发布在
+    [GitHub Release](https://github.com/gan4012/Daybreak/releases/tag/v0.1.1) 与
+    [Gitee 发行版](https://gitee.com/wergansailikebai/daybreak/releases/tag/v0.1.1);
+    Gitee 侧用 `scripts/publish-gitee.ps1` 一条命令上传(幂等:已有发行版则更新标题,已有同名附件则跳过)
+  - ✅ 自更新器:双源 **Gitee 优先 → GitHub 回退**;`--check / --update`;
+    下载支持流式写 .part、Range 断点续传、每源 3 次重试、gh-proxy 镜像回退(仅 github.com 链接)、
+    走 config.json 的代理;覆盖前校验 zip 必含主程序 exe。裁剪后 11.5MB
+  - ✅ 一键更新:设置页「检查更新」检测到新版本 → 弹窗确认 → 启动 `--update` 并退出主程序 → 自动重启
   - ✅ 微软 ClientId 配置化(设置页可填,留空回退开发期备用 ID)
   - ✅ CI 测试策略:集成测试打 `[Trait("Category","Integration")]`,CI 用 `--filter "Category!=Integration"` 只跑 35 项离线测试
-  - ⚠️ 环境注意:本机推送走 SSH `ssh.github.com:443`(github.com:22 与 HTTPS+GCM 均不稳),配置在 `~/.ssh/config`
-- **M5 剩余**:自更新器 `--update` 端到端实测(覆盖安装+重启)、公测分发与反馈迭代
+  - ⚠️ 环境注意:GitHub 推送走 SSH `ssh.github.com:443`(github.com:22 与 HTTPS+GCM 均不稳),
+    配置在 `~/.ssh/config`;Gitee 令牌存用户级环境变量 `GITEE_TOKEN`
+- **M5 剩余**:一键更新完整覆盖重启的实机验证(下载/校验/替换各环节已单独验证)、
+  公测分发与反馈迭代、Gitee 附件容量上限确认
 
 ## 提交规范
 
