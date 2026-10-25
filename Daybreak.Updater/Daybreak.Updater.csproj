@@ -5,10 +5,14 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <!--
+      独立更新器:刻意不引用 Daybreak.Core / 任何主程序程序集。
+      原因:① 更新时主程序文件被占用,更新器必须能独立运行;
+            ② 打包时对更新器启用裁剪(11MB vs 30MB),Core 的反射式 JSON 反序列化在裁剪下不安全。
+      配置读取改为 JsonDocument 手工解析 config.json(见 Program.ReadConfiguredUpdateSource)。
+    -->
+    <PublishTrimmed>true</PublishTrimmed>
+    <TrimMode>partial</TrimMode>
   </PropertyGroup>
-
-  <ItemGroup>
-    <ProjectReference Include="..\Daybreak.Core\Daybreak.Core.csproj" />
-  </ItemGroup>
 
 </Project>

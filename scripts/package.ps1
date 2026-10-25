@@ -27,6 +27,30 @@ dotnet publish Daybreak.Launcher -c Release -r win-x64 `
 
 if ($LASTEXITCODE -ne 0) { throw "publish 失败" }
 
+# 独立更新器:与主程序同目录,包内需带 Daybreak.Updater.exe 否则「检查更新」失效
+Write-Host "==> dotnet publish 更新器" -ForegroundColor Cyan
+$updaterTmp = Join-Path $root "updater-tmp"
+if (Test-Path $updaterTmp) { Remove-Item $updaterTmp -Recurse -Force }
+dotnet publish Daybreak.Updater -c Release -r win-x64 `
+    --self-contained:$SelfContained `
+    -p:PublishSingleFile=$singleFile `
+    -p:IncludeNativeLibrariesForSelfExtract=$singleFile `
+    -p:EnableCompressionInSingleFile=true `
+    -p:PublishTrimmed=$SelfContained `
+    -o $updaterTmp
+
+if ($LASTEXITCODE -ne 0) { throw "更新器 publish 失败" }
+
+Write-Host "==> 合并更新器到包目录" -ForegroundColor Cyan
+Get-ChildItem -Path $updaterTmp -Filter "Daybreak.Updater.*" |
+    Where-Object { $_.Extension -in ".exe", ".pdb" } |
+    Copy-Item -Destination $outDir -Force
+Remove-Item $updaterTmp -Recurse -Force
+
+if (-not (Test-Path (Join-Path $outDir "Daybreak.Updater.exe"))) {
+    throw "Daybreak.Updater.exe 未生成到包目录"
+}
+
 Write-Host "==> 写入内测说明" -ForegroundColor Cyan
 @'
 

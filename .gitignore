@@ -8,3 +8,6 @@ publish/
 *.log
 publish-beta/
 *.zip
+
+trim-test/
+updater-tmp/

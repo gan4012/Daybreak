@@ -47,6 +47,15 @@ powershell -File scripts/package.ps1
    与 LaunchService.HookProgress 的 1MB 字节节流。任何新的事件接入都要同样节流。
 7. **PowerShell 5.1 脚本**:含中文的 .ps1 必须 UTF-8 **带 BOM**;here-string 必须 CRLF 行尾
    (LF-only 的 here-string 在 PS 5.1 解析失败)。新脚本写完先转格式。
+   **实测坑**:用编辑工具(edit/write)改含中文的 .ps1 会**静默丢掉 BOM**,之后 `powershell -File` 报
+   `Unexpected token ')'` 且错误信息里中文是乱码(如「完成」→「瀹屾垚」)。改完必须重新补 BOM:
+   ```powershell
+   $p="scripts\package.ps1"
+   $t=[System.IO.File]::ReadAllText($p,(New-Object System.Text.UTF8Encoding($false)))
+   $t=($t -replace "`r`n","`n") -replace "`n","`r`n"
+   [System.IO.File]::WriteAllText($p,$t,(New-Object System.Text.UTF8Encoding($true)))
+   ```
+   校验:`ParseFile` 解析无错 + 前 3 字节为 `EF BB BF`。
 8. **品牌红线**:不碰 PCL 闭源代码、不用 "PCL" 字样、authlib-injector 是 AGPL(只读规范不抄代码)、
    引用的第三方库必须是 MIT/Apache 等宽松许可(改依赖前查许可证)。
 
@@ -57,7 +66,7 @@ Daybreak.slnx(.NET 10 新格式解决方案)
 ├── Daybreak.Launcher      # WPF 主程序:Views(Pages)/ViewModels/Services/Themes
 ├── Daybreak.Core          # 启动核心:Game/Auth/Mod/Market/Diagnostics/Storage,不依赖 UI
 ├── Daybreak.Market        # Modrinth 客户端(预留扩展)
-├── Daybreak.Updater       # 独立更新器(M5 占位)
+├── Daybreak.Updater       # 独立更新器:--check/--update;不引用 Core,发布时裁剪(11.5MB)
 └── Daybreak.Core.Tests    # xUnit(离线桩 + 联网集成测试分文件)
 ```
 
@@ -126,7 +135,7 @@ Daybreak.slnx(.NET 10 新格式解决方案)
 
 - **M0-M4 全部完成**,启动链路实机验证:**Minecraft 26.2 已由启动器成功拉起进主界面**
 - 完善批次:版本管理页(删除/打开目录/Mod 清理/更新检查)、可编辑设置页、崩溃诊断(12 规则)、
-  CurseForge 免 key 导入、安装记录持久化、内测打包脚本(package.ps1 → 70.6MB 自包含 zip)
+  CurseForge 免 key 导入、安装记录持久化、内测打包脚本(package.ps1 → 77MB 自包含 zip,含主程序+更新器)
 - **未完成/已知缺口**:
   - Mod 更新检查无持久化 UI 入口(逻辑已在版本管理页,可从资源市场一键触发更佳)
   - CurseForge zip 导入未用真实整合包实测(逻辑同 mrpack,理论可用)

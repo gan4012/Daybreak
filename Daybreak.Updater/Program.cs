@@ -4,7 +4,6 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Reflection;
 using System.Text.Json;
-using Daybreak.Core.Storage;
 
 namespace Daybreak.Updater;
 
@@ -15,6 +14,10 @@ internal static class Program
 {
     private const string AppName = "Daybreak.Launcher";
     private const string ZipFileName = "Daybreak-内测包-win-x64.zip";
+
+    /// <summary>默认更新源:本仓库的 GitHub Releases latest。</summary>
+    private const string DefaultUpdateSource =
+        "https://api.github.com/repos/gan4012/Daybreak/releases/latest";
 
     [STAThread]
     private static Task<int> Main(string[] args)
@@ -33,14 +36,45 @@ internal static class Program
     private static Task<int> ShowHelp()
     {
         Console.WriteLine("用法:");
-        Console.WriteLine($"  {AppName}.Updater.exe --check       检查是否有新版本可用");
-        Console.WriteLine($"  {AppName}.Updater.exe --update      应用已下载的更新(等待主程序退出后覆盖+重启)");
+        Console.WriteLine("  Daybreak.Updater.exe --check       检查是否有新版本可用");
+        Console.WriteLine("  Daybreak.Updater.exe --update      下载并应用最新更新(等待主程序退出后覆盖+重启)");
         Console.WriteLine();
         Console.WriteLine("说明:");
-        Console.WriteLine("  --check  通过 LauncherConfig.UpdateSourceUrl 获取更新源,默认使用 GitHub Releases API。");
+        Console.WriteLine("  --check  读取 config.json 的 UpdateSourceUrl 作为更新源,未配置时用本仓库 GitHub Releases。");
         Console.WriteLine("           若有新版本则输出 \"NEW:<version>:<url>\" 到 stdout,否则输出 \"UP_TO_DATE\"。");
         Console.WriteLine("  --update 等待主程序退出,然后下载新版本 zip 并解压覆盖当前目录,最后重启主程序。");
         return Task.FromResult(1);
+    }
+
+    /// <summary>
+    /// 从 config.json 读取 UpdateSourceUrl。
+    /// 刻意不引用 Daybreak.Core:更新器必须在裁剪(self-contained + trim)下仍可用,
+    /// 且要能在主程序文件被占用的场景下独立运行,因此只用 JsonDocument 手工取值。
+    /// </summary>
+    private static string? ReadConfiguredUpdateSource()
+    {
+        try
+        {
+            var configPath = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                "Daybreak", "config.json");
+            if (!File.Exists(configPath))
+                return null;
+
+            using var doc = JsonDocument.Parse(File.ReadAllText(configPath));
+            if (doc.RootElement.ValueKind == JsonValueKind.Object &&
+                doc.RootElement.TryGetProperty("UpdateSourceUrl", out var url) &&
+                url.ValueKind == JsonValueKind.String)
+            {
+                var value = url.GetString();
+                return string.IsNullOrWhiteSpace(value) ? null : value;
+            }
+        }
+        catch
+        {
+            // 配置缺失/损坏都回退默认源
+        }
+        return null;
     }
 
     /// <summary>检查更新:比较当前版本与远程最新版本。</summary>
@@ -48,9 +82,8 @@ internal static class Program
     {
         try
         {
-            var config = LauncherConfig.Load();
-            var currentVersion = GetAssemblyVersion();
-            var remoteUrl = ResolveRemoteUrl(config);
+            var currentVersion = GetLauncherVersion();
+            var remoteUrl = ResolveRemoteUrl();
 
             Console.WriteLine($"[Updater] 当前版本: {currentVersion}");
             Console.WriteLine($"[Updater] 更新源: {remoteUrl}");
@@ -86,12 +119,11 @@ internal static class Program
     {
         try
         {
-            var config = LauncherConfig.Load();
             var downloadUrl = extraArgs.Length > 0 ? extraArgs[0] : null;
             if (string.IsNullOrEmpty(downloadUrl))
             {
                 // 尝试从远程获取
-                var remoteUrl = ResolveRemoteUrl(config);
+                var remoteUrl = ResolveRemoteUrl();
                 var remote = await FetchRemoteVersion(remoteUrl);
                 if (remote is null)
                 {
@@ -130,6 +162,7 @@ internal static class Program
             Console.WriteLine("[Updater] 解压覆盖中...");
             var exeDir = Path.GetDirectoryName(Process.GetCurrentProcess().MainModule?.FileName!)
                          ?? Environment.CurrentDirectory;
+            CleanupStaleFiles(exeDir);
             ExtractAndReplace(zipPath, exeDir);
 
             // 重启主程序
@@ -161,22 +194,51 @@ internal static class Program
         }
     }
 
-    /// <summary>获取当前程序集的版本号。</summary>
-    private static string GetAssemblyVersion()
+    /// <summary>
+    /// 获取**主程序**版本号用于更新比较。
+    /// 注意不能用自己的版本:更新器与主程序版本号是两套,自己比较会得出错误结论。
+    /// 读同目录 Daybreak.Launcher.exe 的 FileVersion(形如 0.1.0.0,归一化为 0.1.0)。
+    /// </summary>
+    private static string GetLauncherVersion()
     {
+        try
+        {
+            var exeDir = Path.GetDirectoryName(Process.GetCurrentProcess().MainModule?.FileName!)
+                         ?? Environment.CurrentDirectory;
+            var launcherExe = Path.Combine(exeDir, AppName + ".exe");
+            if (File.Exists(launcherExe))
+            {
+                var fileVersion = FileVersionInfo.GetVersionInfo(launcherExe).FileVersion;
+                if (!string.IsNullOrWhiteSpace(fileVersion))
+                    return NormalizeVersion(fileVersion);
+            }
+        }
+        catch
+        {
+            // 读不到就回退自身版本(仅影响提示文案)
+        }
+
         var asm = Assembly.GetExecutingAssembly();
         var info = asm.GetCustomAttribute<AssemblyInformationalVersionAttribute>();
-        return info?.InformationalVersion ?? asm.GetName().Version?.ToString() ?? "unknown";
+        return NormalizeVersion(info?.InformationalVersion ?? asm.GetName().Version?.ToString() ?? "0.0.0");
     }
 
-    /// <summary>解析更新源 URL:优先使用配置的自定义地址,否则用 GitHub Releases API。</summary>
-    private static string ResolveRemoteUrl(LauncherConfig config)
+    /// <summary>归一化版本号:去掉 +commit 后缀,并统一为前三段(0.1.0.0 → 0.1.0)。</summary>
+    private static string NormalizeVersion(string version)
     {
-        if (!string.IsNullOrWhiteSpace(config.UpdateSourceUrl))
-            return config.UpdateSourceUrl;
+        var plus = version.IndexOf('+');
+        if (plus >= 0)
+            version = version[..plus];
 
-        // 默认 GitHub Releases:需要用户替换 {owner}/{repo} 为实际仓库
-        return "https://api.github.com/repos/zcode-daybreak/Daybreak/releases/latest";
+        var parts = version.Split('.', StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length <= 3 ? string.Join('.', parts) : string.Join('.', parts.Take(3));
+    }
+
+    /// <summary>解析更新源 URL:优先使用 config.json 里的自定义地址,否则用本仓库 GitHub Releases。</summary>
+    private static string ResolveRemoteUrl()
+    {
+        var configured = ReadConfiguredUpdateSource();
+        return string.IsNullOrWhiteSpace(configured) ? DefaultUpdateSource : configured;
     }
 
     /// <summary>从远程 URL 获取最新版本信息。</summary>
@@ -277,21 +339,63 @@ internal static class Program
         }
     }
 
-    /// <summary>解压 zip 到目标目录,已有文件覆盖。</summary>
+    /// <summary>
+    /// 解压 zip 到目标目录,已有文件覆盖。
+    /// 特例:更新器自身正在运行,不能直接覆盖——先重命名为 .old(Windows 允许重命名运行中的 exe),
+    /// 再写入新文件;下次启动时清理 .old。
+    /// </summary>
     private static void ExtractAndReplace(string zipPath, string targetDir)
     {
+        var selfPath = Process.GetCurrentProcess().MainModule?.FileName;
+
         using var archive = ZipFile.OpenRead(zipPath);
         foreach (var entry in archive.Entries)
         {
-            var relativePath = entry.FullName.Replace('/', Path.DirectorySeparatorChar);
-            var targetPath = Path.Combine(targetDir, relativePath);
-
             // 跳过目录条目本身
             if (entry.Name == string.Empty)
                 continue;
 
+            var relativePath = entry.FullName.Replace('/', Path.DirectorySeparatorChar);
+            var targetPath = Path.Combine(targetDir, relativePath);
+
             Directory.CreateDirectory(Path.GetDirectoryName(targetPath)!);
+
+            if (selfPath is not null &&
+                string.Equals(Path.GetFullPath(targetPath), Path.GetFullPath(selfPath), StringComparison.OrdinalIgnoreCase))
+            {
+                // 正在运行的自身 exe:重命名腾位
+                var parked = selfPath + ".old";
+                try
+                {
+                    if (File.Exists(parked)) File.Delete(parked);
+                    File.Move(selfPath, parked);
+                    entry.ExtractToFile(targetPath, overwrite: true);
+                    Console.WriteLine("[Updater] 已替换更新器自身(旧文件将在下次启动时清理)");
+                }
+                catch (Exception ex)
+                {
+                    // 替换失败不影响主程序更新,下次更新时会再试
+                    Console.Error.WriteLine($"[Updater] 更新器自身替换失败(可忽略):{ex.Message}");
+                    try { entry.ExtractToFile(targetPath, overwrite: false); } catch { /* 保留旧文件 */ }
+                }
+                continue;
+            }
+
             entry.ExtractToFile(targetPath, overwrite: true);
         }
+    }
+
+    /// <summary>清理上次更新残留的 .old 文件(此时旧的更新器已不再运行)。</summary>
+    private static void CleanupStaleFiles(string dir)
+    {
+        try
+        {
+            foreach (var stale in Directory.EnumerateFiles(dir, "*.old", SearchOption.AllDirectories))
+            {
+                try { File.Delete(stale); }
+                catch { /* 仍被占用则下次再清 */ }
+            }
+        }
+        catch { /* 清理失败不影响更新 */ }
     }
 }

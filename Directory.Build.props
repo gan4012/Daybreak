@@ -1,0 +1,15 @@
+<Project>
+
+  <!--
+    统一版本号:所有项目共用。
+    发布时打 tag v0.1.0 → CI 用 tag 名;本地构建用这里的 0.1.0。
+    自更新器读主程序 exe 的 FileVersion 做版本比较(见 Program.GetLauncherVersion)。
+  -->
+  <PropertyGroup>
+    <Version>0.1.0</Version>
+    <Company>Daybreak</Company>
+    <Product>Daybreak 破晓启动器</Product>
+    <Copyright>Copyright © 2026 Daybreak</Copyright>
+  </PropertyGroup>
+
+</Project>
