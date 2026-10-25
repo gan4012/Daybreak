@@ -321,3 +321,21 @@ Daybreak.slnx(.NET 10 新格式解决方案)
 
 **未验证**:真实 Minecraft 客户端之间的"建房→好友加入→游戏内进服"完整流程
 (需要两个人真机操作,提权窗口无法自动化点击)。网络层已证明可用,剩余是 UI 操作验证。
+
+### v0.1.3 发布记录(2026-10-26)
+
+- GitHub Release: https://github.com/gan4012/Daybreak/releases/tag/v0.1.3(97.47 MB)
+- Gitee 发行版: https://gitee.com/wergansailikebai/daybreak/releases/tag/v0.1.3(id=1241194)
+- 网盘包:`Daybreak-v0.1.3-win-x64.zip`(96.68 MB，由 scripts/package-netdisk.ps1 生成)
+- 更新器实测命中 Gitee，`--check` 返回 UP_TO_DATE
+
+**发版流程里新增的一步(以前没有)**:
+CI 现在需要仓库 Secret `DAYBREAK_RELAY`(值为中继地址 host:port)。
+workflow 里做了前置校验，缺失会立刻在「Check relay config」步骤失败并给出提示，
+而不是等到打包最后才报错。
+
+**踩坑**:
+- 第一次发版 CI 失败在 Package 步骤，原因是 relay.txt 被 gitignore 后 CI 拿不到。
+  修复为从 Secret 注入，并同时兼容 `vars.DAYBREAK_RELAY`两种配置方式。
+- 判断 Gitee 发行版里的中文是否真的乱码，不能看 PowerShell 的 `Invoke-RestMethod` 回显
+  (它按错误编码解码)，要 `curl` 存原始字节再用 UTF-8 解。实测服务端存的是正确中文。
