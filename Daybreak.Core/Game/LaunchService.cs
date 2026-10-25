@@ -44,6 +44,12 @@ public record LaunchRequest(
 
     /// <summary>自定义 JVM 参数(空格分隔,如 -XX:+UseG1GC)。</summary>
     public string? JvmArguments { get; init; }
+
+    /// <summary>
+    /// 追加到游戏主类的参数(如联机直连的 --server / --port)。
+    /// 与 JVM 参数不同,这些是传给 Minecraft 本体而不是 Java 的。
+    /// </summary>
+    public IReadOnlyList<string>? ExtraGameArguments { get; init; }
 }
 
 /// <summary>加载器类型。</summary>
@@ -453,6 +459,15 @@ public class LaunchService
             foreach (var arg in request.JvmArguments.Split(' ', StringSplitOptions.RemoveEmptyEntries))
             {
                 option.ExtraJvmArguments = option.ExtraJvmArguments.Append(new MArgument(arg));
+            }
+        }
+
+        // 追加游戏本体参数(联机直连的 --server/--port 走这里)
+        if (request.ExtraGameArguments is { Count: > 0 })
+        {
+            foreach (var arg in request.ExtraGameArguments)
+            {
+                option.ExtraGameArguments = option.ExtraGameArguments.Append(new MArgument(arg));
             }
         }
 

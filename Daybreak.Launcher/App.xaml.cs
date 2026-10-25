@@ -21,11 +21,13 @@ public partial class App : Application
             services.AddTransient<DownloadViewModel>();
             services.AddTransient<VersionsViewModel>();
             services.AddTransient<ModsViewModel>();
+            services.AddTransient<MultiplayerViewModel>();
             services.AddSingleton<MainWindow>();
             services.AddTransient<Views.Pages.HomePage>();
             services.AddTransient<Views.Pages.DownloadPage>();
             services.AddTransient<Views.Pages.VersionsPage>();
             services.AddTransient<Views.Pages.ModsPage>();
+            services.AddTransient<Views.Pages.MultiplayerPage>();
             services.AddTransient<Views.Pages.SettingsPage>();
             services.AddTransient<Views.Pages.AboutPage>();
         })

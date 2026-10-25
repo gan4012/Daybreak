@@ -1,0 +1,131 @@
+<ui:FluentWindow
+    x:Class="Daybreak.Launcher.Views.CreateServerDialog"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+    Title="新建服务端"
+    Width="620"
+    Height="640"
+    WindowStartupLocation="CenterOwner"
+    WindowBackdropType="Acrylic"
+    ExtendsContentIntoTitleBar="True"
+    ResizeMode="NoResize">
+
+    <Grid Margin="26,44,26,20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- 标题 -->
+        <StackPanel Grid.Row="0">
+            <StackPanel Orientation="Horizontal">
+                <ui:SymbolIcon Symbol="Server24" FontSize="24" Foreground="{StaticResource BrandAccentBrush}" />
+                <TextBlock Text="新建服务端" FontSize="21" FontWeight="SemiBold"
+                           Margin="10,0,0,0" VerticalAlignment="Center" />
+            </StackPanel>
+            <TextBlock Text="选好类型和版本后点「创建」,启动器会自动下载服务端核心。"
+                       FontSize="12" Opacity="0.65" Margin="0,6,0,0" TextWrapping="Wrap" />
+        </StackPanel>
+
+        <!-- 表单 -->
+        <ScrollViewer Grid.Row="1" Margin="0,16,0,0" VerticalScrollBarVisibility="Auto">
+            <StackPanel>
+
+                <TextBlock Text="服务端类型" FontSize="13" FontWeight="SemiBold" />
+                <ComboBox x:Name="TypeCombo" MinHeight="34" Margin="0,6,0,0"
+                          SelectionChanged="OnTypeChanged">
+                    <ComboBoxItem Content="原版(Vanilla)—— 最简单,适合和朋友玩原版生存" />
+                    <ComboBoxItem Content="Forge —— 玩老牌整合包(1.20.1)" />
+                    <ComboBoxItem Content="Fabric —— 玩现代 Mod 与性能优化" />
+                    <ComboBoxItem Content="Paper —— 人多的插件服,性能最好" />
+                </ComboBox>
+
+                <TextBlock Text="服务端名称" FontSize="13" FontWeight="SemiBold" Margin="0,16,0,0" />
+                <TextBlock Text="会作为文件夹名,建议用英文或简单中文,不要带 \ / : * ? 等符号。"
+                           FontSize="11.5" Opacity="0.6" Margin="0,2,0,0" />
+                <ui:TextBox x:Name="NameBox" MinHeight="34" Margin="0,6,0,0"
+                            PlaceholderText="例如:朋友的生存服" />
+
+                <TextBlock Text="游戏版本" FontSize="13" FontWeight="SemiBold" Margin="0,16,0,0" />
+                <Grid Margin="0,6,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <ComboBox x:Name="VersionCombo" Grid.Column="0" MinHeight="34"
+                              SelectionChanged="OnVersionChanged" />
+                    <Button Grid.Column="1" Content="重新加载" MinHeight="34" Padding="12,2"
+                            Margin="8,0,0,0" Click="OnReloadVersions" />
+                </Grid>
+
+                <!-- 加载器/构建版本:仅 Forge/Fabric/Paper 可见 -->
+                <StackPanel x:Name="LoaderPanel" Visibility="Collapsed" Margin="0,16,0,0">
+                    <TextBlock x:Name="LoaderLabel" Text="加载器版本" FontSize="13" FontWeight="SemiBold" />
+                    <TextBlock Text="不确定就用列表里的第一个(通常是最新稳定版)。"
+                               FontSize="11.5" Opacity="0.6" Margin="0,2,0,0" />
+                    <ComboBox x:Name="LoaderCombo" MinHeight="34" Margin="0,6,0,0" />
+                </StackPanel>
+
+                <Grid Margin="0,16,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel Grid.Column="0" Margin="0,0,8,0">
+                        <TextBlock Text="端口" FontSize="13" FontWeight="SemiBold" />
+                        <TextBlock Text="默认 25565;被占用时换一个。" FontSize="11.5" Opacity="0.6" Margin="0,2,0,0" />
+                        <ui:TextBox x:Name="PortBox" MinHeight="34" Margin="0,6,0,0" Text="25565" />
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="1" Margin="8,0,0,0">
+                        <TextBlock Text="最大内存(MB)" FontSize="13" FontWeight="SemiBold" />
+                        <TextBlock Text="建议 2048~8192,Mod 服建议 4096 以上。"
+                                   FontSize="11.5" Opacity="0.6" Margin="0,2,0,0" />
+                        <ui:TextBox x:Name="MemoryBox" MinHeight="34" Margin="0,6,0,0" Text="2048" />
+                    </StackPanel>
+                </Grid>
+
+                <!-- EULA:必须用户主动勾选 -->
+                <Border CornerRadius="10" Background="#1AFFFFFF" Padding="14,12" Margin="0,18,0,0">
+                    <StackPanel>
+                        <TextBlock Text="Minecraft 最终用户许可协议(EULA)" FontSize="13" FontWeight="SemiBold" />
+                        <TextBlock Margin="0,6,0,0" FontSize="11.5" Opacity="0.75" TextWrapping="Wrap"
+                                   Text="开服需要同意 Mojang 的 EULA。点击下方链接可先阅读条款;勾选后表示你已阅读并同意。" />
+                        <TextBlock Margin="0,6,0,0" FontSize="11.5">
+                            <Hyperlink NavigateUri="https://aka.ms/MinecraftEULA"
+                                       RequestNavigate="OnOpenEula">
+                                <Run Text="https://aka.ms/MinecraftEULA" />
+                            </Hyperlink>
+                        </TextBlock>
+                        <CheckBox x:Name="EulaCheck" Margin="0,10,0,0"
+                                  Content="我已阅读并同意 Minecraft EULA" />
+                    </StackPanel>
+                </Border>
+
+            </StackPanel>
+        </ScrollViewer>
+
+        <!-- 进度/状态 -->
+        <TextBlock Grid.Row="2" x:Name="StatusText" Opacity="0.7" FontSize="12"
+                   TextWrapping="Wrap" Margin="0,12,0,0" />
+
+        <!-- 底部按钮 -->
+        <Grid Grid.Row="3" Margin="0,14,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <Button Grid.Column="0" Content="取消" MinHeight="36" Padding="18,6"
+                    HorizontalAlignment="Left" Click="OnCancel" />
+
+            <ui:Button x:Name="CreateButton" Grid.Column="2" Content="创建" MinHeight="36" Padding="26,6"
+                       Style="{StaticResource BrandPrimaryButton}" Click="OnCreate" />
+        </Grid>
+    </Grid>
+</ui:FluentWindow>

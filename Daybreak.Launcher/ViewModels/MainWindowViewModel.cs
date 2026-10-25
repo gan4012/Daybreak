@@ -40,6 +40,7 @@ public partial class MainWindowViewModel : ObservableObject
         new("下载游戏", SymbolRegular.ArrowDownload24, typeof(Views.Pages.DownloadPage)),
         new("版本管理", SymbolRegular.Layer24, typeof(Views.Pages.VersionsPage)),
         new("资源市场", SymbolRegular.PuzzlePiece24, typeof(Views.Pages.ModsPage)),
+        new("联机", SymbolRegular.Globe24, typeof(Views.Pages.MultiplayerPage)),
     ];
 
     /// <summary>底部导航(分隔线下方)</summary>
