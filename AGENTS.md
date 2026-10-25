@@ -15,10 +15,10 @@
 # 构建(注意 .slnx 新格式)
 dotnet build Daybreak.slnx -c Debug
 
-# 测试(50 项:39 离线单元 + 11 联网集成;集成测试带 [Trait("Category","Integration")])
+# 测试(离线 118 项 + 联网集成 20 项;集成测试带 [Trait("Category","Integration")])
 dotnet test Daybreak.slnx -c Debug --no-build
 
-# 只跑离线快速测试(CI 用这个;集成测试会真下载游戏 jar / Java 运行时 / Forge 安装器,较慢)
+# 只跑离线快速测试(CI 用这个;集成测试会真下载游戏 jar / Java 运行时 / 服务端核心,较慢)
 dotnet test Daybreak.slnx -c Debug --no-build --filter "Category!=Integration"
 
 # 实机运行
@@ -153,6 +153,49 @@ Daybreak.slnx(.NET 10 新格式解决方案)
   RowDefinition 却用了 `Grid.Row="3"`(状态文字),WPF 会把它挤到最后一行,
   导致状态文字与 Mod 管理卡片**重叠**。改布局网格时务必数一遍行数。
 
+### 联机功能(WPF-UI / 服务端)相关坑
+
+- **图标名必须用反射验证,不能用 dll 字符串搜索**:我用字符串搜索判断 `Network24` "存在",
+  结果它并不是 `SymbolRegular` 的枚举成员,XAML 解析直接抛
+  `XamlParseException: Network24 is not a valid value for SymbolRegular`,
+  表现为「点侧栏导航没反应、内容区不切换」(异常被 DispatcherUnhandledException 吞掉只写日志)。
+  **正确做法**是写个反射小程序枚举真实成员(共 9235 个):
+  ```csharp
+  Enum.GetNames(typeof(SymbolRegular)).Contains("Globe24")
+  ```
+  已确认不存在:`Network24` / `Wifi24` / `World24`;存在:`VirtualNetwork24` / `Globe24` / `Earth24`。
+- **Core 模型直接绑到 UI 不会刷新**:`SavedServer` 等 Core 类没有 `INotifyPropertyChanged`,
+  改它的属性后界面无反应(实测:状态栏说"查询成功"、列表却还是灰点和「—」)。
+  必须像 `SavedServerItemViewModel` 那样在 UI 层包一层可观察对象。
+- **本项目不使用 IValueConverter**,条件显示统一走 `DataTrigger` + VM 暴露的布尔属性
+  (如 `HasSelectedServer`/`IsServersTab`/`NeedsEula`)。新增页面请沿用,不要引入转换器。
+- **Forge 1.17+ 服务端不能用 `java -jar run.bat` 启动**:安装器产出的 run.bat 内容是
+  `java @user_jvm_args.txt @libraries/net/minecraftforge/forge/<ver>/win_args.txt %*`,
+  正确做法是从 run.bat 解析 `@` 引用再拼命令行(见 `ServerManager.ExtractAtArguments`)。
+  解析时**要排除 `@echo` 这类 batch 指令**(否则会传给 java 一个无效的 `@echo` 参数),
+  做法是只接受真实存在的 `.txt` 参数文件。
+- **`DownloadEngine.DownloadFileAsync` 的 expectedSize 语义**:`null`=大小未知、`0`=**已知空文件**。
+  传 0 表达"未知"会得到一个 0 字节文件,直到服务端启动报
+  `Invalid or corrupt jarfile` 才暴露(编译期与单元测试都发现不了)。
+- **Fabric 服务端必须同时准备原版 server.jar**:`fabric-server-launch.jar` 依赖同目录的
+  原版 jar 做运行时补丁(`fabric-server-launcher.properties` 的 `serverJar` 项)。
+- **Minecraft 服务器地址必须查 SRV 记录**:`_minecraft._tcp.<域名>`。
+  实测 `2b2t.org` 的真实入口是 `connect.2b2t.org:25565`,直连 A 记录会打到 Cloudflare 上然后超时。
+  **.NET 的 `System.Net.Dns` 不支持 SRV 查询**,`SrvResolver` 是手写的 DNS 报文
+  (UDP 53,含压缩指针解析、按系统 DNS 服务器轮询)。握手里仍填**原始域名**而非 SRV 目标。
+- **各服务端下载源(2026-10-26 全部实测)**:
+  | 类型 | 端点 | 备注 |
+  |---|---|---|
+  | Vanilla | 版本 JSON 的 `downloads.server` | 带 SHA1,BMCLAPI 有镜像 |
+  | Fabric | `meta.fabricmc.net/v2/versions/loader/{游戏}/{加载器}/{安装器}/server/jar` | **必须 4 段路径**,3 段会 404 |
+  | Paper | `fill.papermc.io/v3/projects/paper/...` | **旧 API `api.papermc.io/v2` 已下线(410)**;带 SHA256;`/versions/{ver}` 还给出官方推荐 JVM 参数 |
+  | Forge | Forge 安装器 + `--installServer` | **BMCLAPI 对该安装器返回 403**,必须走官方源 |
+- **服务端进程管理要点**:必须 `RedirectStandardInput=true`(靠 stdin 发 `stop`/`op` 等命令);
+  停服先发 `stop` 命令、超时才强杀(直接杀会导致世界未保存);日志量比游戏更大,
+  UI 侧必须节流(实测用 300ms DispatcherTimer 批量刷,并只保留尾部 500 行)。
+- **服务端实例存储布局**:`<游戏目录>/daybreak-servers/<名称>/`(含 server.jar/world/logs),
+  索引在 `<游戏目录>/daybreak-servers.json`;收藏的服务器列表在 `<游戏目录>/daybreak-serverlist.json`。
+
 ## 实机验证工作流
 
 辅助脚本(仓库根):
@@ -187,6 +230,20 @@ Daybreak.slnx(.NET 10 新格式解决方案)
   - ✅ Mod 列表搜索/排序:按文件名搜索,支持 名称/大小/更新状态 三种排序(已实机截图验证)
   - ✅ Mod 一键更新:可更新项旁出现「更新」按钮,支持「全部更新」批量处理(下载新版 → 删旧文件 → 刷新记录)
   - 🐞 实机发现并修复:引导后主程序不启动(ShutdownMode)、版本页状态文字与 Mod 卡片重叠(缺 RowDefinition)
+- **联机辅助功能(2026-10-26 完成)**:四种服务端全部实测可开服,联机页三 Tab 已实机截图验证
+  - ✅ **Vanilla / Fabric / Paper / Forge 四种服务端端到端打通**(集成测试各跑一次真实开服):
+    从下载核心 → EULA 校验 → 启动 → 就绪日志 `Done (...)` → 端口监听 → 控制台命令 → 优雅停服
+  - ✅ 服务端实例存 `<游戏目录>/daybreak-servers/<名称>/`,索引 `daybreak-servers.json`
+  - ✅ server.properties 可视化读写(**保留注释与未知键**);EULA 必须用户显式勾选
+  - ✅ 控制台:stdin 命令通道(`op`/`list`/`whitelist` 等)+ 日志节流(300ms 批量刷、尾部 500 行)
+  - ✅ 服务器列表:收藏(持久化)、SLP 查在线人数与延迟、**一键进服**(`--server/--port` 直连)
+  - ✅ 局域网:监听 Minecraft 广播(组播 224.0.2.60:4445)+ 网段扫描兜底
+  - ✅ **新增 SrvResolver**:手写 DNS SRV 查询(.NET 的 `Dns` 类不支持),
+    修复了 2b2t.org 这类"真实入口在 SRV 记录里"的服务器直连必超时的问题
+  - 🐞 实机发现并修复:图标名 `Network24` 不存在导致整页 XAML 解析失败、
+    Core 模型无 INPC 导致查询结果不刷新、Forge run.bat 启动方式、DownloadEngine 大小语义、
+    Fabric 缺原版 jar、`@echo` 被误当参数文件
+  - 📌 未验证:一键进服的真实拉起(需要已安装的游戏版本)、局域网广播在两台真机间的发现
 - **M5 进展(2026-10-26 完成)**:
   - ✅ 仓库:GitHub `https://github.com/gan4012/Daybreak`(公开,SSH over 443 推送)
     + Gitee 镜像 `https://gitee.com/wergansailikebai/daybreak`(公开,HTTPS + 私人令牌推送)

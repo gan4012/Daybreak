@@ -323,6 +323,16 @@ public partial class MultiplayerViewModel : ObservableObject
         if (item is null || IsBusy)
             return;
 
+        // 「已在运行」不是失败:快速连点按钮、或状态还没同步回来时会走到这里,
+        // 报成"启动失败"会让用户以为出问题了(实测踩过)。
+        if (GetServerManager().IsRunning(item.Name))
+        {
+            item.State = ServerState.Running;
+            item.StateText = "运行中";
+            StatusText = $"{item.Name} 已在运行中";
+            return;
+        }
+
         IsBusy = true;
         StatusText = $"正在启动 {item.Name}…";
 
@@ -347,7 +357,13 @@ public partial class MultiplayerViewModel : ObservableObject
                     item.StateText = e.Message ?? DescribeState(e.State);
 
                     if (e.State == ServerState.Stopped)
+                    {
+                        // 异常退出要把退出码带出来,否则用户只看到"已停止"却不知为何
+                        if (e.ExitCode is not null and not 0)
+                            StatusText = $"{item.Name} 已退出(退出码 {e.ExitCode}),请查看控制台日志";
+
                         RefreshServers();
+                    }
                 });
             };
 
