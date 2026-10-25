@@ -7,9 +7,12 @@ using Daybreak.Core.Market;
 
 namespace Daybreak.Core.Mod;
 
+/// <summary>单个 Mod 的安装记录(用于精确的更新检查)。</summary>
+public record ModInstallRecord(string Filename, string ProjectId, string VersionNumber, string? Sha1);
+
 /// <summary>
 /// Mod 安装服务:Modrinth 资源装入指定版本的 mods 目录,以及 mrpack 整合包导入。
-/// 目录解析遵循版本隔离配置。
+/// 目录解析遵循版本隔离配置。安装记录持久化到版本目录的 daybreak-mods.json。
 /// </summary>
 public class ModInstallService(LaunchService launchService, string mirror = "official")
 {
@@ -31,6 +34,9 @@ public class ModInstallService(LaunchService launchService, string mirror = "off
             new HttpClient(new ResilientHttpHandler(mirror)) { Timeout = System.Threading.Timeout.InfiniteTimeSpan }, file.Url, targetPath, file.Size, file.Sha1,
             cancellationToken);
 
+        RecordInstall(versionId, new ModInstallRecord(
+            file.Filename, modVersion.Id, modVersion.VersionNumber, file.Sha1));
+
         progress?.Report(new LaunchProgress
         {
             CurrentFile = file.Filename,
@@ -41,6 +47,46 @@ public class ModInstallService(LaunchService launchService, string mirror = "off
         });
 
         return targetPath;
+    }
+
+    /// <summary>读取版本的 Mod 安装记录(文件不存在返回空表)。</summary>
+    public IReadOnlyList<ModInstallRecord> GetInstallRecords(string versionId)
+    {
+        var path = RecordsPath(versionId);
+        if (!File.Exists(path))
+            return [];
+
+        try
+        {
+            return JsonSerializer.Deserialize<List<ModInstallRecord>>(File.ReadAllText(path))
+                   ?? [];
+        }
+        catch (JsonException)
+        {
+            return [];
+        }
+    }
+
+    /// <summary>更新某条安装记录(记录存在时)。</summary>
+    public void RecordInstall(string versionId, ModInstallRecord record)
+    {
+        var records = GetInstallRecords(versionId).ToList();
+        records.RemoveAll(r => r.Filename == record.Filename);
+        records.Add(record);
+        SaveRecords(versionId, records);
+    }
+
+    private string RecordsPath(string versionId)
+    {
+        // 记录跟随版本隔离:存放在该版本的游戏根目录(mods 目录同级)
+        return Path.Combine(launchService.ResolveGameRootForVersion(versionId), "daybreak-mods.json");
+    }
+
+    private void SaveRecords(string versionId, List<ModInstallRecord> records)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(RecordsPath(versionId))!);
+        File.WriteAllText(RecordsPath(versionId),
+            JsonSerializer.Serialize(records, new JsonSerializerOptions { WriteIndented = true }));
     }
 
     /// <summary>

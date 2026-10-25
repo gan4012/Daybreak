@@ -217,23 +217,42 @@ public partial class VersionsViewModel : ObservableObject
         try
         {
             var client = new ModrinthClient();
+            var installService = new ModInstallService(GetService(), _config.Mirror);
+            var records = installService.GetInstallRecords(SelectedVersion.Name)
+                .ToDictionary(r => r.Filename, StringComparer.OrdinalIgnoreCase);
             var outdated = 0;
             var checkedCount = 0;
 
             foreach (var mod in Mods)
             {
-                if (string.IsNullOrEmpty(mod.Sha1))
-                    continue;
+                // 有安装记录的用项目 ID 精确查询;没有的回退 SHA1 反查
+                if (records.TryGetValue(mod.Filename, out var record))
+                {
+                    mod.IsChecking = true;
+                    var projectVersions = await client.GetVersionsAsync(record.ProjectId);
+                    var remote = projectVersions
+                        .OrderByDescending(v => v.DatePublished)
+                        .FirstOrDefault();
+                    mod.SetUpdateInfo(remote?.VersionNumber);
+                    mod.IsChecking = false;
 
-                mod.IsChecking = true;
-                var remote = await client.GetVersionBySha1Async(mod.Sha1);
-                mod.SetUpdateInfo(remote?.VersionNumber);
-                mod.IsChecking = false;
+                    if (remote is not null &&
+                        !mod.Filename.Contains(remote.VersionNumber, StringComparison.OrdinalIgnoreCase))
+                        outdated++;
+                    checkedCount++;
+                }
+                else if (!string.IsNullOrEmpty(mod.Sha1))
+                {
+                    mod.IsChecking = true;
+                    var remote = await client.GetVersionBySha1Async(mod.Sha1);
+                    mod.SetUpdateInfo(remote?.VersionNumber);
+                    mod.IsChecking = false;
 
-                if (remote is not null &&
-                    !mod.Filename.Contains(remote.VersionNumber, StringComparison.OrdinalIgnoreCase))
-                    outdated++;
-                checkedCount++;
+                    if (remote is not null &&
+                        !mod.Filename.Contains(remote.VersionNumber, StringComparison.OrdinalIgnoreCase))
+                        outdated++;
+                    checkedCount++;
+                }
             }
 
             StatusText = checkedCount == 0

@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.IO;
+using System.IO.Compression;
 using System.Net.Http;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -121,6 +122,83 @@ public partial class ModsViewModel : ObservableObject
                 return (versionName[..index], loader);
         }
         return (versionName, null);
+    }
+
+    [RelayCommand]
+    private async Task ImportPackAsync()
+    {
+        if (SelectedTargetVersion is null)
+        {
+            StatusText = "请先安装并选择一个游戏版本";
+            return;
+        }
+
+        var dialog = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = "选择整合包(mrpack / CurseForge zip)",
+            Filter = "整合包 (*.mrpack;*.zip)|*.mrpack;*.zip",
+        };
+        if (dialog.ShowDialog() != true)
+            return;
+
+        var zipPath = dialog.FileName;
+        var isCurseForge = false;
+        try
+        {
+            using var archive = System.IO.Compression.ZipFile.OpenRead(zipPath);
+            isCurseForge = archive.GetEntry("manifest.json") is not null;
+        }
+        catch { /* 非法 zip 由后续流程报错 */ }
+
+        IsBusy = true;
+        ProgressPercent = 0;
+        ActiveDownloadName = Path.GetFileName(zipPath);
+        StatusText = $"正在导入整合包 {Path.GetFileName(zipPath)}…";
+
+        IProgress<LaunchProgress> uiProgress = new Progress<LaunchProgress>(p =>
+        {
+            if (p.TotalTasks > 0 && p.TotalBytes > 0)
+            {
+                var percent = (int)Math.Clamp(p.ProgressedBytes * 100.0 / p.TotalBytes, 0, 100);
+                ProgressPercent = Math.Max(ProgressPercent, percent);
+            }
+            else if (p.TotalTasks > 0)
+            {
+                ProgressPercent = Math.Max(ProgressPercent,
+                    (int)(p.ProgressedTasks * 100.0 / p.TotalTasks));
+            }
+            CurrentFile = p.CurrentFile;
+        });
+
+        try
+        {
+            if (isCurseForge)
+            {
+                await new CurseForgeImportService(_config.Mirror).ImportAsync(
+                    SelectedTargetVersion,
+                    GetService().ResolveGameRootForVersion(SelectedTargetVersion),
+                    zipPath, uiProgress);
+            }
+            else
+            {
+                await GetInstallService().ImportModrinthPackAsync(
+                    SelectedTargetVersion, zipPath, uiProgress);
+            }
+            StatusText = $"整合包 {Path.GetFileName(zipPath)} 导入完成";
+            Log.Information("整合包导入完成:{Pack} → {Version}", zipPath, SelectedTargetVersion);
+        }
+        catch (Exception ex)
+        {
+            StatusText = "整合包导入失败:" + ex.Message;
+            Log.Warning(ex, "整合包导入失败");
+        }
+        finally
+        {
+            IsBusy = false;
+            ActiveDownloadName = null;
+            CurrentFile = null;
+            DownloadedBytesDisplay = "";
+        }
     }
 
     private bool CanSearch() => !IsBusy;

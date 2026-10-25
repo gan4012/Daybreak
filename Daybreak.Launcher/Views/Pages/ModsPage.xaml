@@ -22,6 +22,7 @@
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
             <ui:TextBox
                 Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
@@ -41,6 +42,14 @@
                 Content="搜索"
                 Style="{StaticResource BrandPrimaryButton}"
                 MinWidth="96"
+                Margin="12,0,0,0" />
+            <ui:Button
+                Grid.Column="3"
+                Command="{Binding ImportPackCommand}"
+                Icon="{ui:SymbolIcon ArrowImport24}"
+                Content="导入整合包"
+                ToolTip="导入 mrpack(Modrinth)或 zip(CurseForge)整合包到当前选中版本"
+                MinHeight="36"
                 Margin="12,0,0,0" />
         </Grid>
 
