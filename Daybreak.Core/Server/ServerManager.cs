@@ -240,12 +240,49 @@ public class ServerManager
     // ===== 命令组装 =====
 
     /// <summary>
-    /// 组装启动参数。Forge 1.17+ 走 run.bat(参数由它的 args 文件决定),
-    /// 其余情况是标准的 java -Xmx -jar 形式。
+    /// 组装启动参数。
+    ///
+    /// 两种情况:
+    /// 1. 普通服务端(Vanilla/Fabric/Paper,以及老版本 Forge)→ `java -Xmx.. -jar &lt;jar&gt; nogui`
+    /// 2. **Forge 1.17+** → 安装器生成的是 run.bat,真正的启动命令是
+    ///    `java @user_jvm_args.txt @libraries/.../win_args.txt nogui`,
+    ///    参数来自两个 @ 文件(内存也要写在 user_jvm_args.txt 里,不再是命令行)。
+    ///    这里直接读 run.bat 提取 @ 引用,而不是硬编码路径——Forge 不同小版本的
+    ///    libraries 目录结构会变,硬编码迟早失效。
     /// </summary>
     public List<string> BuildArguments(ServerInstance instance, string dir)
     {
         var args = new List<string>();
+        var launchTarget = instance.LaunchTarget ?? "server.jar";
+
+        // Forge 1.17+:走 @ 参数文件
+        if (launchTarget.Equals("run.bat", StringComparison.OrdinalIgnoreCase))
+        {
+            var atArgs = ExtractAtArguments(Path.Combine(dir, "run.bat"));
+
+            if (atArgs.Count > 0)
+            {
+                // 内存由 ForgeServerInstaller.WriteJvmArgs 写进 user_jvm_args.txt,
+                // 这里不再重复加 -Xmx(同时出现会以后者为准,容易让用户困惑)
+                args.AddRange(atArgs);
+                args.Add("nogui");
+                return args;
+            }
+
+            // 万一 run.bat 结构变了(没解析到 @ 引用),回退到猜测标准路径
+            var fallback = FindForgeWinArgs(dir);
+            if (fallback is not null)
+            {
+                args.Add($"-Xms{instance.MinMemoryMb}M");
+                args.Add($"-Xmx{instance.MaxMemoryMb}M");
+                args.Add("@" + Path.GetRelativePath(dir, fallback));
+                args.Add("nogui");
+                return args;
+            }
+
+            throw new InvalidOperationException(
+                "无法从 run.bat 解析出 Forge 的启动参数。请尝试重新安装该服务端。");
+        }
 
         // 内存与自定义 JVM 参数
         if (!string.IsNullOrWhiteSpace(instance.JvmArguments))
@@ -256,10 +293,28 @@ public class ServerManager
 
         // 服务端在无 GUI 环境必须加 nogui,否则原版会尝试弹窗
         args.Add("-jar");
-        args.Add(instance.LaunchTarget ?? "server.jar");
+        args.Add(launchTarget);
         args.Add("nogui");
 
         return args;
+    }
+
+    /// <summary>兜底:在 libraries 下找 Forge 的 win_args.txt。</summary>
+    private static string? FindForgeWinArgs(string dir)
+    {
+        var libraries = Path.Combine(dir, "libraries");
+        if (!Directory.Exists(libraries))
+            return null;
+
+        try
+        {
+            return Directory.GetFiles(libraries, "win_args.txt", SearchOption.AllDirectories)
+                .FirstOrDefault();
+        }
+        catch (IOException)
+        {
+            return null;
+        }
     }
 
     /// <summary>把一行参数拆成数组,正确处理引号(路径常带空格)。</summary>
@@ -274,6 +329,55 @@ public class ServerManager
             var value = match.Groups[1].Success ? match.Groups[1].Value : match.Value;
             if (!string.IsNullOrEmpty(value))
                 result.Add(value);
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// 从 Forge 1.17+ 生成的 run.bat 里提取 @参数文件引用。
+    ///
+    /// run.bat 的内容形如:
+    ///   @echo off
+    ///   java @user_jvm_args.txt @libraries/net/minecraftforge/forge/&lt;ver&gt;/win_args.txt %*
+    /// 正确启动方式是 `java @user_jvm_args.txt @libraries/.../win_args.txt nogui`,
+    /// **不是** `java -jar run.bat`(那样只会报 "Invalid or corrupt jarfile")。
+    ///
+    /// 注意:不能简单地抓所有 `@xxx` —— batch 的 `@echo off` 也是 @ 开头,
+    /// 被抓进去会让 java 报错。只认看起来像参数文件的(`.txt` 结尾或文件确实存在)。
+    /// </summary>
+    public static List<string> ExtractAtArguments(string runBatPath)
+    {
+        var result = new List<string>();
+        if (!File.Exists(runBatPath))
+            return result;
+
+        string content;
+        try
+        {
+            content = File.ReadAllText(runBatPath);
+        }
+        catch (IOException)
+        {
+            return result;
+        }
+
+        var directory = Path.GetDirectoryName(runBatPath) ?? ".";
+
+        foreach (Match match in Regex.Matches(content, @"@([^\s""]+)"))
+        {
+            var raw = match.Groups[1].Value;
+
+            // 排除 batch 指令(@echo / @rem / @set ...)
+            if (!raw.Contains('.') && !raw.Contains('/') && !raw.Contains('\\'))
+                continue;
+
+            var relative = raw.Replace('/', Path.DirectorySeparatorChar);
+            var full = Path.Combine(directory, relative);
+
+            // 只保留真实存在的参数文件;不存在说明是别的 @ 用法
+            if (File.Exists(full))
+                result.Add("@" + relative);
         }
 
         return result;

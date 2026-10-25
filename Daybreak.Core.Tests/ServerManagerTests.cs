@@ -150,4 +150,134 @@ public class ServerManagerTests
         Assert.Equal(Path.Combine(gameDir, "daybreak-servers", "我的服"), dir);
         Assert.Equal(Path.Combine(gameDir, "daybreak-servers"), manager.ServersRoot);
     }
+
+    /// <summary>
+    /// Forge 1.17+ 的启动参数必须从 run.bat 的 @ 引用里提取。
+    /// 曾经想过用 `java -jar run.bat`,那只会得到 "Invalid or corrupt jarfile"。
+    /// </summary>
+    [Fact]
+    public void ExtractAtArguments_ParsesForgeRunBat()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "daybreak-runbat-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        var runBat = Path.Combine(dir, "run.bat");
+
+        try
+        {
+            // 参数文件必须真实存在才会被采纳(见实现里的说明)
+            File.WriteAllText(Path.Combine(dir, "user_jvm_args.txt"), "-Xmx2G");
+            var libDir = Path.Combine(dir, "libraries", "net", "minecraftforge", "forge", "1.20.1-47.4.28");
+            Directory.CreateDirectory(libDir);
+            File.WriteAllText(Path.Combine(libDir, "win_args.txt"), "--launchTarget forge_server");
+
+            // run.bat 的实际内容形态(Forge 1.17+ 生成,注意开头的 @echo off)
+            File.WriteAllText(runBat, string.Join("\r\n",
+                "@echo off",
+                "REM Forge startup script",
+                "java @user_jvm_args.txt @libraries/net/minecraftforge/forge/1.20.1-47.4.28/win_args.txt %*",
+                "pause"));
+
+            var args = ServerManager.ExtractAtArguments(runBat);
+
+            // 必须恰好 2 个:@echo 里的 echo 不能被当成参数文件
+            Assert.Equal(2, args.Count);
+            Assert.Contains("@user_jvm_args.txt", args);
+            Assert.Contains(args, a => a.Contains("win_args.txt"));
+            Assert.DoesNotContain(args, a => a.Contains("echo"));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void ExtractAtArguments_IgnoresNonExistentFiles()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "daybreak-runbat-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        var runBat = Path.Combine(dir, "run.bat");
+
+        try
+        {
+            // 引用了不存在的文件:忽略掉,避免把无效参数传给 java
+            File.WriteAllText(runBat, "java @missing_args.txt nogui");
+
+            Assert.Empty(ServerManager.ExtractAtArguments(runBat));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void BuildArguments_ForgeRunBat_UsesAtFilesNotJarFlag()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "daybreak-forgearg-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, "user_jvm_args.txt"), "-Xmx2G");
+            var libDir = Path.Combine(dir, "libraries", "net", "minecraftforge", "forge", "1.20.1-47.4.28");
+            Directory.CreateDirectory(libDir);
+            File.WriteAllText(Path.Combine(libDir, "win_args.txt"), "--launchTarget forge_server");
+
+            File.WriteAllText(Path.Combine(dir, "run.bat"), string.Join("\r\n",
+                "@echo off",
+                "java @user_jvm_args.txt @libraries/net/minecraftforge/forge/1.20.1-47.4.28/win_args.txt %*"));
+
+            var manager = new ServerManager(
+                new Daybreak.Core.Game.LaunchService(dir, Daybreak.Core.Game.DownloadMirror.Official),
+                Daybreak.Core.Game.DownloadMirror.Official);
+
+            var instance = new ServerInstance
+            {
+                Name = "t",
+                Type = ServerType.Forge,
+                GameVersion = "1.20.1",
+                LaunchTarget = "run.bat",
+            };
+
+            var args = manager.BuildArguments(instance, dir);
+
+            Assert.Contains(args, a => a.StartsWith('@') && a.Contains("user_jvm_args"));
+            Assert.Contains(args, a => a.StartsWith('@') && a.Contains("win_args"));
+            Assert.Contains("nogui", args);
+            // 走 @ 文件时不能再用 -jar,否则必然启动失败
+            Assert.DoesNotContain("-jar", args);
+            Assert.DoesNotContain("run.bat", args);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void BuildArguments_NonForge_StillUsesJarForm()
+    {
+        var manager = new ServerManager(
+            new Daybreak.Core.Game.LaunchService(
+                Path.Combine(Path.GetTempPath(), "daybreak-arg-" + Guid.NewGuid().ToString("N")),
+                Daybreak.Core.Game.DownloadMirror.Official),
+            Daybreak.Core.Game.DownloadMirror.Official);
+
+        var instance = new ServerInstance
+        {
+            Name = "t",
+            Type = ServerType.Vanilla,
+            GameVersion = "1.20.1",
+            LaunchTarget = "server.jar",
+        };
+
+        var args = manager.BuildArguments(instance, ".");
+
+        // 非 Forge 路径不能被改动
+        Assert.Contains("-jar", args);
+        Assert.Contains("server.jar", args);
+        Assert.Contains("nogui", args);
+        Assert.DoesNotContain(args, a => a.StartsWith('@'));
+    }
 }
