@@ -6,7 +6,7 @@
     自更新器读主程序 exe 的 FileVersion 做版本比较(见 Program.GetLauncherVersion)。
   -->
   <PropertyGroup>
-    <Version>0.1.0</Version>
+    <Version>0.1.1</Version>
     <Company>Daybreak</Company>
     <Product>Daybreak 破晓启动器</Product>
     <Copyright>Copyright © 2026 Daybreak</Copyright>

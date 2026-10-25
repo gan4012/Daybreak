@@ -47,7 +47,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Daybreak-win-x64
-          path: Daybreak-内测包-win-x64.zip
+          # 包名必须全 ASCII:Release 上传会把非 ASCII 字符替换成 '.',使自更新器匹配失败
+          path: Daybreak-beta-win-x64.zip
           if-no-files-found: error
 
       # tag 推送 → 直接发布为正式 Release(draft=false)
@@ -58,7 +59,7 @@ jobs:
         with:
           tag_name: ${{ github.event.inputs.tag_name || github.ref_name }}
           name: ${{ github.event.inputs.tag_name || github.ref_name }}
-          files: Daybreak-内测包-win-x64.zip
+          files: Daybreak-beta-win-x64.zip
           draft: ${{ github.event.inputs.create_draft == 'true' }}
           generate_release_notes: true
           fail_on_unmatched_files: true

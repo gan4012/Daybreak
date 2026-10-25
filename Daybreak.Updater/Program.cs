@@ -13,7 +13,13 @@ internal record RemoteVersionInfo(string Version, string DownloadUrl, long SizeB
 internal static class Program
 {
     private const string AppName = "Daybreak.Launcher";
-    private const string ZipFileName = "Daybreak-内测包-win-x64.zip";
+
+    /// <summary>
+    /// 发布包文件名(必须全 ASCII:GitHub Release 上传会把非 ASCII 字符替换成 '.')。
+    /// 匹配时优先精确名,失败则退回「以 -win-x64.zip 结尾」的宽松规则,避免因历史改名失效。
+    /// </summary>
+    private const string ZipFileName = "Daybreak-beta-win-x64.zip";
+    private const string ZipNameSuffix = "-win-x64.zip";
 
     /// <summary>默认更新源:本仓库的 GitHub Releases latest。</summary>
     private const string DefaultUpdateSource =
@@ -265,15 +271,37 @@ internal static class Program
 
             if (tagName is not null && assetsDoc is not null)
             {
-                // 查找匹配的 zip 资产
+                // 先找精确名;没有则退回后缀匹配(兼容历史改名/中文名被 GitHub 改写的情况)
+                string? fallbackName = null;
+                string? fallbackUrl = null;
+                long fallbackSize = 0;
+
                 foreach (var asset in assetsDoc.RootElement.EnumerateArray())
                 {
                     var name = asset.GetProperty("name").GetString();
-                    if (name == ZipFileName)
+                    if (string.IsNullOrEmpty(name))
+                        continue;
+
+                    var assetUrl = asset.GetProperty("browser_download_url").GetString();
+                    var assetSize = asset.TryGetProperty("size", out var sizeEl) ? sizeEl.GetInt64() : 0;
+
+                    if (name == ZipFileName && assetUrl is not null)
+                        return new RemoteVersionInfo(tagName, assetUrl, assetSize);
+
+                    if (fallbackName is null &&
+                        name.EndsWith(ZipNameSuffix, StringComparison.OrdinalIgnoreCase) &&
+                        assetUrl is not null)
                     {
-                        var browserDownloadUrl = asset.GetProperty("browser_download_url").GetString();
-                        return new RemoteVersionInfo(tagName, browserDownloadUrl!, asset.GetProperty("size").GetInt64());
+                        fallbackName = name;
+                        fallbackUrl = assetUrl;
+                        fallbackSize = assetSize;
                     }
+                }
+
+                if (fallbackUrl is not null)
+                {
+                    Console.WriteLine($"[Updater] 未找到标准包名 {ZipFileName},使用同后缀资产:{fallbackName}");
+                    return new RemoteVersionInfo(tagName, fallbackUrl, fallbackSize);
                 }
             }
 

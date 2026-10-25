@@ -12,7 +12,9 @@ $root = $PSScriptRoot | Split-Path
 Set-Location $root
 
 $outDir = Join-Path $root "publish-beta"
-$zipName = "Daybreak-内测包-win-x64.zip"
+# 包名必须全 ASCII:GitHub Release 上传会把非 ASCII 字符替换成 '.'(实测「内测包」→「.」),
+# 导致自更新器按文件名匹配资产失败
+$zipName = "Daybreak-beta-win-x64.zip"
 
 if (Test-Path $outDir) { Remove-Item $outDir -Recurse -Force }
 

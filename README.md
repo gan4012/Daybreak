@@ -39,7 +39,7 @@
 
 前往 [Releases](https://github.com/gan4012/Daybreak/releases) 下载最新内测包:
 
-- `Daybreak-内测包-win-x64.zip` — 自包含单文件,**无需安装 .NET 运行时**
+- `Daybreak-beta-win-x64.zip` — 自包含单文件,**无需安装 .NET 运行时**
 - 解压到任意目录,双击 `Daybreak.Launcher.exe` 即可
 
 首次启动游戏会自动下载匹配的 Java 运行时与游戏资源(数百 MB,取决于版本),请耐心等待。
