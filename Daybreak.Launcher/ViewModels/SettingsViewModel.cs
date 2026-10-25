@@ -300,58 +300,66 @@ public partial class SettingsViewModel : ObservableObject
     [RelayCommand]
     private async Task CheckForUpdatesAsync()
     {
+        if (IsBusy)
+            return;
+
         IsBusy = true;
+        SettingsStatusText = "正在检查更新…";
         try
         {
             var updaterExe = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Daybreak.Updater.exe");
             if (!File.Exists(updaterExe))
             {
-                SettingsStatusText = "未找到 Daybreak.Updater.exe,请确保更新器与主程序在同一目录";
+                SettingsStatusText = "未找到 Daybreak.Updater.exe(更新器需与主程序同目录,内测包已含)";
                 return;
             }
 
-            var psi = new ProcessStartInfo
+            var (exitCode, stdout, stderr) = await RunUpdaterCheckAsync(updaterExe);
+
+            // 0 = 已是最新;2 = 有新版本;其它 = 失败
+            if (exitCode != 2)
             {
-                FileName = updaterExe,
-                Arguments = "--check",
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true,
-            };
-
-            using var proc = Process.Start(psi)
-                ?? throw new InvalidOperationException("无法启动更新器");
-            await proc.WaitForExitAsync();
-
-            var output = await proc.StandardOutput.ReadToEndAsync();
-            var error = await proc.StandardError.ReadToEndAsync();
-
-            if (proc.ExitCode == 2 && !string.IsNullOrEmpty(output))
-            {
-                // NEW:<version>:<url>
-                var parts = output.Trim().Split(':');
-                if (parts.Length >= 3)
+                if (exitCode == 0)
                 {
-                    var newVersion = parts[1];
-                    var downloadUrl = string.Join(":", parts.Skip(2));
-                    SettingsStatusText = $"发现新版本 {newVersion}! 请访问 GitHub Releases 手动下载更新。";
-                    Log.Information("发现新版本: {Version} ({Url})", newVersion, downloadUrl);
+                    SettingsStatusText = $"已是最新版本(当前 {CurrentAppVersion()})";
                 }
                 else
                 {
-                    SettingsStatusText = "检测到新版本,但解析结果异常:" + output;
+                    var detail = FirstNonEmptyLine(stderr) ?? FirstNonEmptyLine(stdout) ?? $"退出码 {exitCode}";
+                    SettingsStatusText = "检查更新失败:" + detail;
+                    Log.Warning("检查更新失败:退出码 {Code},{Detail}", exitCode, detail);
                 }
+                return;
             }
-            else if (proc.ExitCode == 0)
+
+            var (newVersion, downloadUrl) = ParseNewVersionLine(stdout);
+            if (string.IsNullOrEmpty(newVersion) || string.IsNullOrEmpty(downloadUrl))
             {
-                SettingsStatusText = "已是最新版本";
+                SettingsStatusText = "检测到新版本,但无法解析下载地址。请到 Releases 页面手动下载。";
+                Log.Warning("更新输出解析失败:{Out}", stdout);
+                return;
             }
-            else
+
+            Log.Information("发现新版本 {Version}:{Url}", newVersion, downloadUrl);
+            SettingsStatusText = $"发现新版本 {newVersion}";
+
+            var confirm = System.Windows.MessageBox.Show(
+                $"发现新版本 {newVersion}\n" +
+                $"当前版本:{CurrentAppVersion()}\n\n" +
+                "更新将下载新版本压缩包(约 77 MB)并自动重启启动器。\n" +
+                "下载期间会弹出命令行窗口显示进度,请勿手动关闭。\n\n" +
+                "是否立即更新?",
+                "发现新版本",
+                System.Windows.MessageBoxButton.YesNo,
+                System.Windows.MessageBoxImage.Question);
+
+            if (confirm != System.Windows.MessageBoxResult.Yes)
             {
-                SettingsStatusText = "检查更新失败:" + (error ?? output);
-                Log.Warning("检查更新失败,退出码:{Code},输出:{Out},错误:{Err}", proc.ExitCode, output, error);
+                SettingsStatusText = $"已跳过更新(新版本 {newVersion} 可随时重新检查)";
+                return;
             }
+
+            StartUpdateAndShutdown(updaterExe, downloadUrl, newVersion);
         }
         catch (Exception ex)
         {
@@ -362,6 +370,130 @@ public partial class SettingsViewModel : ObservableObject
         {
             IsBusy = false;
         }
+    }
+
+    /// <summary>
+    /// 运行更新器的 --check。
+    /// 必须先并发读取 stdout/stderr 再等待退出:只等待会让子进程在管道缓冲区写满时阻塞
+    /// (典型死锁),之后再 ReadToEnd 会永远等不到。
+    /// </summary>
+    private static async Task<(int ExitCode, string Stdout, string Stderr)> RunUpdaterCheckAsync(string updaterExe)
+    {
+        var psi = new ProcessStartInfo
+        {
+            FileName = updaterExe,
+            Arguments = "--check",
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            WorkingDirectory = Path.GetDirectoryName(updaterExe)!,
+        };
+
+        using var proc = Process.Start(psi) ?? throw new InvalidOperationException("无法启动更新器");
+        var stdoutTask = proc.StandardOutput.ReadToEndAsync();
+        var stderrTask = proc.StandardError.ReadToEndAsync();
+
+        // 更新器内部网络超时为 30s,这里给足余量避免误判挂死
+        using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(90));
+        try
+        {
+            await proc.WaitForExitAsync(timeoutCts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            try { proc.Kill(entireProcessTree: true); } catch { /* 已退出 */ }
+            throw new TimeoutException("更新器检查超时(90 秒),请检查网络或代理设置");
+        }
+
+        return (proc.ExitCode, (await stdoutTask).Trim(), (await stderrTask).Trim());
+    }
+
+    /// <summary>从更新器输出中提取 "NEW:&lt;version&gt;:&lt;url&gt;" 行(URL 本身含冒号,需整段保留)。</summary>
+    private static (string? Version, string? Url) ParseNewVersionLine(string stdout)
+    {
+        foreach (var raw in stdout.Split('\n'))
+        {
+            var line = raw.Trim();
+            if (!line.StartsWith("NEW:", StringComparison.Ordinal))
+                continue;
+
+            var rest = line["NEW:".Length..];
+            var sep = rest.IndexOf(':');
+            if (sep <= 0)
+                continue;
+
+            var version = rest[..sep].Trim();
+            var url = rest[(sep + 1)..].Trim();
+            if (version.Length > 0 && url.Length > 0)
+                return (version, url);
+        }
+        return (null, null);
+    }
+
+    private static string? FirstNonEmptyLine(string text)
+    {
+        foreach (var raw in text.Split('\n'))
+        {
+            var line = raw.Trim();
+            if (line.Length > 0)
+                return line;
+        }
+        return null;
+    }
+
+    /// <summary>当前程序版本(单文件发布时 Environment.ProcessPath 即主程序 exe)。</summary>
+    private static string CurrentAppVersion()
+    {
+        try
+        {
+            var path = Environment.ProcessPath;
+            if (!string.IsNullOrEmpty(path))
+            {
+                var fileVersion = FileVersionInfo.GetVersionInfo(path).FileVersion;
+                if (!string.IsNullOrWhiteSpace(fileVersion))
+                    return fileVersion;
+            }
+        }
+        catch
+        {
+            // 读不到版本不影响主流程
+        }
+        return "未知";
+    }
+
+    /// <summary>
+    /// 启动更新器执行 --update,随后退出主程序。
+    /// 顺序很关键:更新器会先下载,再等待主程序进程消失后才覆盖文件,
+    /// 所以这里必须真的退出,否则更新器会一直等。
+    /// </summary>
+    private void StartUpdateAndShutdown(string updaterExe, string downloadUrl, string newVersion)
+    {
+        Log.Information("开始一键更新到 {Version}", newVersion);
+
+        // UseShellExecute=true:让更新器在独立控制台窗口里显示下载进度
+        var psi = new ProcessStartInfo
+        {
+            FileName = updaterExe,
+            Arguments = $"--update \"{downloadUrl}\"",
+            UseShellExecute = true,
+            WorkingDirectory = Path.GetDirectoryName(updaterExe)!,
+        };
+        Process.Start(psi);
+
+        SettingsStatusText = $"正在更新到 {newVersion},启动器即将关闭…";
+
+        // 留一小段时间让状态文本渲染,再退出让更新器接管文件替换
+        var timer = new System.Windows.Threading.DispatcherTimer
+        {
+            Interval = TimeSpan.FromMilliseconds(1200),
+        };
+        timer.Tick += (_, _) =>
+        {
+            timer.Stop();
+            System.Windows.Application.Current?.Shutdown();
+        };
+        timer.Start();
     }
 
     /// <summary>是否正在执行操作(用于按钮禁用)。</summary>

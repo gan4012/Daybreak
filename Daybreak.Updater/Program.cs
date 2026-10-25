@@ -21,9 +21,15 @@ internal static class Program
     private const string ZipFileName = "Daybreak-beta-win-x64.zip";
     private const string ZipNameSuffix = "-win-x64.zip";
 
-    /// <summary>默认更新源:本仓库的 GitHub Releases latest。</summary>
-    private const string DefaultUpdateSource =
-        "https://api.github.com/repos/gan4012/Daybreak/releases/latest";
+    /// <summary>
+    /// 默认更新源,按顺序尝试:先 Gitee(国内直连快),失败再回退 GitHub(海外/有代理时)。
+    /// 两个仓库地址不同(GitHub 是 gan4012/Daybreak,Gitee 是 wergansailikebai/daybreak),故分开常量。
+    /// </summary>
+    private static readonly string[] DefaultUpdateSources =
+    [
+        "https://gitee.com/api/v5/repos/wergansailikebai/daybreak/releases/latest",
+        "https://api.github.com/repos/gan4012/Daybreak/releases/latest",
+    ];
 
     [STAThread]
     private static Task<int> Main(string[] args)
@@ -89,15 +95,12 @@ internal static class Program
         try
         {
             var currentVersion = GetLauncherVersion();
-            var remoteUrl = ResolveRemoteUrl();
-
             Console.WriteLine($"[Updater] 当前版本: {currentVersion}");
-            Console.WriteLine($"[Updater] 更新源: {remoteUrl}");
 
-            var remote = await FetchRemoteVersion(remoteUrl);
+            var remote = await FetchRemoteFromAnySourceAsync();
             if (remote is null)
             {
-                Console.WriteLine("[Updater] 无法获取远程版本信息,跳过检查");
+                Console.WriteLine("[Updater] 所有更新源均无法获取版本信息,跳过检查");
                 return 0;
             }
 
@@ -120,6 +123,21 @@ internal static class Program
         }
     }
 
+    /// <summary>按顺序尝试各更新源,返回第一个能给出可用版本信息的源。</summary>
+    private static async Task<RemoteVersionInfo?> FetchRemoteFromAnySourceAsync()
+    {
+        foreach (var source in ResolveUpdateSources())
+        {
+            Console.WriteLine($"[Updater] 查询更新源:{source}");
+            var remote = await FetchRemoteVersion(source);
+            if (remote is not null)
+                return remote;
+
+            Console.WriteLine("[Updater] 该源无可用信息,尝试下一个");
+        }
+        return null;
+    }
+
     /// <summary>应用更新:下载 zip、等待主程序退出、解压覆盖、重启。</summary>
     private static async Task<int> ApplyUpdate(string[] extraArgs)
     {
@@ -128,9 +146,8 @@ internal static class Program
             var downloadUrl = extraArgs.Length > 0 ? extraArgs[0] : null;
             if (string.IsNullOrEmpty(downloadUrl))
             {
-                // 尝试从远程获取
-                var remoteUrl = ResolveRemoteUrl();
-                var remote = await FetchRemoteVersion(remoteUrl);
+                // 未显式给 URL:从更新源查最新版
+                var remote = await FetchRemoteFromAnySourceAsync();
                 if (remote is null)
                 {
                     Console.WriteLine("[Updater] 无可用更新");
@@ -145,20 +162,10 @@ internal static class Program
             Directory.CreateDirectory(tempDir);
             var zipPath = Path.Combine(tempDir, ZipFileName);
 
-            using var http = new HttpClient(new HttpClientHandler
-            {
-                AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate,
-            })
-            {
-                Timeout = Timeout.InfiniteTimeSpan,
-            };
-            http.DefaultRequestHeaders.UserAgent.ParseAdd("Daybreak-Launcher/1.0 (Minecraft launcher)");
+            await DownloadWithFallbackAsync(downloadUrl, zipPath);
 
-            // 先下载 zip
-            Console.WriteLine("[Updater] 下载中...");
-            var data = await http.GetByteArrayAsync(downloadUrl);
-            await File.WriteAllBytesAsync(zipPath, data);
-            Console.WriteLine($"[Updater] 下载完成: {data.Length / 1024 / 1024:F1} MB");
+            // 覆盖前先校验压缩包:内容不完整就中止,避免把安装目录写成半残状态
+            ValidatePackage(zipPath);
 
             // 等待主程序退出
             Console.WriteLine("[Updater] 等待主程序退出...");
@@ -240,11 +247,16 @@ internal static class Program
         return parts.Length <= 3 ? string.Join('.', parts) : string.Join('.', parts.Take(3));
     }
 
-    /// <summary>解析更新源 URL:优先使用 config.json 里的自定义地址,否则用本仓库 GitHub Releases。</summary>
-    private static string ResolveRemoteUrl()
+    /// <summary>
+    /// 返回要尝试的更新源列表:config.json 设了 UpdateSourceUrl 就只用它(用户强制指定),
+    /// 否则用默认的 Gitee → GitHub 双源。
+    /// </summary>
+    private static IReadOnlyList<string> ResolveUpdateSources()
     {
         var configured = ReadConfiguredUpdateSource();
-        return string.IsNullOrWhiteSpace(configured) ? DefaultUpdateSource : configured;
+        return string.IsNullOrWhiteSpace(configured)
+            ? DefaultUpdateSources
+            : [configured];
     }
 
     /// <summary>从远程 URL 获取最新版本信息。</summary>
@@ -364,6 +376,252 @@ internal static class Program
             if (processes.Length == 0)
                 break;
             Thread.Sleep(500);
+        }
+    }
+
+    /// <summary>
+    /// 从 config.json 读取代理设置(与主程序「设置 → 网络代理」一致)。
+    /// 同样刻意不引用 Daybreak.Core,保持更新器独立。
+    /// </summary>
+    private static (string? Host, int Port, string Type) ReadProxyFromConfig()
+    {
+        try
+        {
+            var configPath = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                "Daybreak", "config.json");
+            if (!File.Exists(configPath))
+                return (null, 0, "HTTP");
+
+            using var doc = JsonDocument.Parse(File.ReadAllText(configPath));
+            var root = doc.RootElement;
+            if (root.ValueKind != JsonValueKind.Object)
+                return (null, 0, "HTTP");
+
+            string? host = root.TryGetProperty("ProxyHost", out var h) && h.ValueKind == JsonValueKind.String
+                ? h.GetString()
+                : null;
+            var port = root.TryGetProperty("ProxyPort", out var p) && p.ValueKind == JsonValueKind.Number
+                ? p.GetInt32()
+                : 0;
+            var type = root.TryGetProperty("ProxyType", out var t) && t.ValueKind == JsonValueKind.String
+                ? (t.GetString() ?? "HTTP")
+                : "HTTP";
+
+            return (string.IsNullOrWhiteSpace(host) ? null : host, port, type);
+        }
+        catch
+        {
+            return (null, 0, "HTTP");
+        }
+    }
+
+    /// <summary>构建下载用 HttpClient:应用配置的代理;未配置时沿用系统默认代理。</summary>
+    private static HttpClient CreateHttpClient()
+    {
+        var handler = new HttpClientHandler
+        {
+            AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate,
+        };
+
+        var (host, port, type) = ReadProxyFromConfig();
+        if (!string.IsNullOrWhiteSpace(host) && port > 0)
+        {
+            // SOCKS5 需要带 scheme,HTTP 代理用主机+端口即可
+            handler.Proxy = type.Equals("SOCKS5", StringComparison.OrdinalIgnoreCase)
+                ? new WebProxy($"socks5://{host}:{port}")
+                : new WebProxy(host, port);
+            handler.UseProxy = true;
+            Console.WriteLine($"[Updater] 使用配置的代理:{type}://{host}:{port}");
+        }
+
+        var http = new HttpClient(handler)
+        {
+            // 大文件下载不能用 HttpClient 的默认 100s 总超时;由每次尝试的 CTS 控制
+            Timeout = Timeout.InfiniteTimeSpan,
+        };
+        http.DefaultRequestHeaders.UserAgent.ParseAdd("Daybreak-Launcher/1.0 (Minecraft launcher)");
+        return http;
+    }
+
+    /// <summary>
+    /// 下载更新包:直连 → gh-proxy 镜像,每个源多次重试,且**支持断点续传**。
+    /// 国内直连 GitHub Release 资产(objects.githubusercontent.com)经常中途掐断;
+    /// 77MB 若每次都从头重下基本不可能成功,必须靠 Range 续传把进度保住。
+    /// </summary>
+    private static async Task DownloadWithFallbackAsync(string url, string destPath)
+    {
+        var partPath = destPath + ".part";
+
+        var candidates = new List<string> { url };
+
+        // gh-proxy 系镜像只对 github.com 链接有意义(格式:https://镜像/原始URL)。
+        // Gitee 链接本身国内直连就快,不需要也不该套镜像。
+        if (url.Contains("github.com", StringComparison.OrdinalIgnoreCase))
+        {
+            string[] mirrors = ["https://ghproxy.net/", "https://gh-proxy.com/"];
+            foreach (var prefix in mirrors)
+            {
+                if (!url.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                    candidates.Add(prefix + url);
+            }
+        }
+
+        using var http = CreateHttpClient();
+        Exception? lastError = null;
+
+        for (var ci = 0; ci < candidates.Count; ci++)
+        {
+            var candidate = candidates[ci];
+            Console.WriteLine($"[Updater] 下载源 {ci + 1}/{candidates.Count}:{candidate}");
+
+            for (var attempt = 1; attempt <= 3; attempt++)
+            {
+                try
+                {
+                    await DownloadCoreAsync(http, candidate, partPath);
+
+                    if (File.Exists(destPath))
+                        File.Delete(destPath);
+                    File.Move(partPath, destPath);
+
+                    var mb = new FileInfo(destPath).Length / 1024.0 / 1024.0;
+                    Console.WriteLine($"[Updater] 下载完成:{mb:F1} MB" + (ci > 0 ? "(镜像源)" : ""));
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    lastError = ex;
+                    var have = File.Exists(partPath) ? new FileInfo(partPath).Length / 1024.0 / 1024.0 : 0;
+                    Console.WriteLine(
+                        $"[Updater] 第 {attempt} 次尝试失败:{ex.Message}" +
+                        (have > 0 ? $"(已保留 {have:F1} MB,下次续传)" : ""));
+
+                    if (attempt < 3)
+                        await Task.Delay(TimeSpan.FromSeconds(2 * attempt));
+                }
+            }
+            Console.WriteLine("[Updater] 该源多次失败,换下一个源");
+        }
+
+        throw new InvalidOperationException(
+            "所有下载源均失败。可在启动器「设置 → 网络代理」配置代理后重试," +
+            "或到 Releases 页面用浏览器手动下载(浏览器通常能续传)。", lastError);
+    }
+
+    /// <summary>
+    /// 流式下载到 .part 文件(不把 77MB 读进内存),已存在残片时用 Range 续传。
+    /// 每 5MB 打一次进度;服务器不支持 Range 时自动回退为从头下载。
+    /// </summary>
+    private static async Task DownloadCoreAsync(HttpClient http, string url, string partPath)
+    {
+        var existing = File.Exists(partPath) ? new FileInfo(partPath).Length : 0;
+
+        // 单次尝试 20 分钟上限;超时后由外层重试并续传
+        using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(20));
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, url);
+        if (existing > 0)
+            request.Headers.Range = new RangeHeaderValue(existing, null);
+
+        using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cts.Token);
+        response.EnsureSuccessStatusCode();
+
+        bool append;
+        long total;
+        if (response.StatusCode == HttpStatusCode.PartialContent)
+        {
+            // 续传:总长取自 Content-Range
+            total = response.Content.Headers.ContentRange?.Length
+                    ?? (existing + (response.Content.Headers.ContentLength ?? 0));
+            append = true;
+        }
+        else
+        {
+            // 服务器忽略 Range(或本就没有残片):从头下载
+            total = response.Content.Headers.ContentLength ?? 0;
+            append = false;
+            existing = 0;
+        }
+
+        // 残片比远程还大 → 是别的版本/坏文件,清掉从头来
+        if (append && total > 0 && existing >= total)
+        {
+            try { File.Delete(partPath); } catch { /* 下次会再判 */ }
+            throw new IOException($"本地残片({existing} 字节)与远程总长({total} 字节)不符,已清除并重试");
+        }
+
+        if (existing > 0)
+            Console.WriteLine($"[Updater] 续传:从 {existing / 1024.0 / 1024.0:F1} MB 继续(共 {total / 1024.0 / 1024.0:F1} MB)");
+        else
+            Console.WriteLine(total > 0
+                ? $"[Updater] 开始下载:{total / 1024.0 / 1024.0:F1} MB"
+                : "[Updater] 开始下载(大小未知)");
+
+        await using (var source = await response.Content.ReadAsStreamAsync(cts.Token))
+        await using (var target = new FileStream(
+            partPath,
+            append ? FileMode.Append : FileMode.Create,
+            FileAccess.Write, FileShare.None, 1 << 16))
+        {
+            var buffer = new byte[1 << 16];
+            long received = existing;
+            long nextReport = received + 5L * 1024 * 1024;
+            var startedAt = DateTime.UtcNow;
+
+            while (true)
+            {
+                var read = await source.ReadAsync(buffer, cts.Token);
+                if (read <= 0)
+                    break;
+
+                await target.WriteAsync(buffer.AsMemory(0, read), cts.Token);
+                received += read;
+
+                if (received >= nextReport)
+                {
+                    var elapsed = Math.Max(1, (DateTime.UtcNow - startedAt).TotalSeconds);
+                    var speed = (received - existing) / 1024.0 / 1024.0 / elapsed;
+                    var pct = total > 0 ? received * 100.0 / total : 0;
+                    Console.WriteLine(total > 0
+                        ? $"[Updater] {received / 1024.0 / 1024.0:F1} / {total / 1024.0 / 1024.0:F1} MB ({pct:F0}%, {speed:F0} MB/s)"
+                        : $"[Updater] 已下载 {received / 1024.0 / 1024.0:F1} MB ({speed:F0} MB/s)");
+                    nextReport += 5L * 1024 * 1024;
+                }
+            }
+
+            if (total > 0 && received < total)
+                throw new IOException($"连接中断:已收 {received} / {total} 字节");
+        }
+    }
+
+    /// <summary>
+    /// 覆盖前校验下载包:必须是能打开的 zip,且包含主程序 exe。
+    /// 防止网络中断/源返回 HTML 错误页时把安装目录覆盖成残缺状态。
+    /// </summary>
+    private static void ValidatePackage(string zipPath)
+    {
+        ZipArchive archive;
+        try
+        {
+            archive = ZipFile.OpenRead(zipPath);
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException("下载的更新包不是有效的 zip(可能网络中断),已中止更新", ex);
+        }
+
+        using (archive)
+        {
+            var names = archive.Entries.Select(e => e.FullName.Replace('\\', '/')).ToList();
+            var hasLauncher = names.Any(n =>
+                n.Equals(AppName + ".exe", StringComparison.OrdinalIgnoreCase) ||
+                n.EndsWith("/" + AppName + ".exe", StringComparison.OrdinalIgnoreCase));
+
+            if (!hasLauncher)
+                throw new InvalidOperationException($"更新包内容不完整(缺少 {AppName}.exe),已中止更新");
+
+            Console.WriteLine($"[Updater] 更新包校验通过({names.Count} 个条目)");
         }
     }
 
