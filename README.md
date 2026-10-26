@@ -147,3 +147,9 @@ WPF UI (MIT) · CommunityToolkit.Mvvm (MIT) · CmlLib.Core (MIT) · Serilog (Apa
 ## 许可证
 
 [MIT](LICENSE)
+
+---
+
+> **关于仓库范围**
+> 本仓库只包含**启动器本体**（`src/` 代码 + 构建脚本 + 文档）。
+> 官网（`website/`）和演示视频（`video/`）只在本地维护，不同步到这里。
