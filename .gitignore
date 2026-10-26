@@ -37,7 +37,7 @@ website/_preview/
 *.sha256
 
 # 演示视频的录屏素材与生成物(体积大、可重新生成)
-docs/video/配音输出/
+docs/video/配音输出*/
 docs/video/clips/
 docs/video/_test/
 *.mp4
