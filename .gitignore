@@ -43,3 +43,7 @@ docs/video/_test/
 *.mp4
 *.srt
 !docs/video/script-*.txt
+
+docs/video/_frames/
+docs/video/_check/
+docs/video/粗剪/
