@@ -50,7 +50,10 @@ $scriptPath = (Resolve-Path $ScriptFile).Path
 if (-not $OutDir) {
     $OutDir = Join-Path (Split-Path $scriptPath -Parent) "配音输出"
 }
+# 必须转成绝对路径:ffmpeg 的 concat 列表是按「列表文件所在目录」解析相对路径的，
+# 而不是按当前工作目录。传相对路径的 -OutDir 会让拼接步骤找不到分段文件。
 New-Item -ItemType Directory -Path $OutDir -Force | Out-Null
+$OutDir = (Resolve-Path $OutDir).Path
 
 # 读脚本:跳过空行和以 # 开头的注释行
 $lines = Get-Content $scriptPath -Encoding UTF8 |
