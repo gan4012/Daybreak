@@ -1,7 +1,62 @@
 # AGENTS.md — Daybreak 破晓启动器(代理商交接文档)
 
 > 本文件是给 AI 编码助手的完整交接文档。修改本仓库前**必须完整阅读**。
-> 最后更新:2026-10-26。配套文档:`D:\ZCode-Data\launcher-plan\计划.md`(总体里程碑)。
+> 最后更新:2026-10-27。配套文档:`D:\ZCode-Data\launcher-plan\计划.md`(总体里程碑)。
+
+---
+
+# 🚨 第一条铁律：不许把敏感信息写进任何文件
+
+**用户明确要求（2026-10-27）：**
+
+> 「只上传有关游戏部分，不要上传我的密码、IP 等信息，
+>   写任何东西的时候不允许把任何密码或者密钥写进去。」
+
+## 绝对禁止写进仓库 / 文档 / 提交信息的内容
+
+| 类别 | 举例 |
+|---|---|
+| **服务器 IP** | 任何公网 IP（含中继、官网、测试机） |
+| **密码 / 口令** | 服务器密码、数据库密码、面板密码 |
+| **密钥 / 令牌** | SSH 私钥、API Token、Gitee/GitHub Token、ClientSecret |
+| **域名解析细节** | 指向具体 IP 的 A 记录内容 |
+| **个人身份信息** | 手机号、身份证、真实姓名、邮箱 |
+
+## 唯一允许的写法
+
+需要提到服务器时，**只写占位符**：
+
+```
+<中继地址见 third_party/easytier/relay.txt，不进 git>
+<官网服务器见 website/deploy/server.txt，不进 git>
+```
+
+**地址只存在这些 gitignored 的文件里：**
+
+- `third_party/easytier/relay.txt` — 联机中继地址
+- `website/deploy/server.txt` — 官网服务器（`用户@主机`）
+- 环境变量 — `GITEE_TOKEN`、`DAYBREAK_RELAY`、`DAYBREAK_SERVER`
+
+## 仓库范围：只同步启动器本体
+
+```
+✅ 入库   src/  tools/  scripts/  docs/  third_party/  .github/  根目录文件
+⛔ 本地   website/（含服务器地址）  video/（素材大）  dist/（产物）
+```
+
+`website/` 和 `video/` 已在 `.gitignore` 里。**不要为了「方便」把它们加回来。**
+
+## 提交前必须自查
+
+```powershell
+# 一个命令扫全部已暂存文件，有敏感信息就报错
+powershell -File scripts/check-secrets.ps1 -Staged
+```
+
+**已装好 pre-commit 钩子，提交时会自动跑。** 钩子挡下来时不要 `--no-verify` 绕过，
+先把敏感信息拿掉。
+
+---
 
 ## 项目是什么
 

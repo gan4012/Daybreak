@@ -1,0 +1,33 @@
+#!/bin/sh
+# Daybreak pre-commit 钩子
+#
+# 用户硬性要求:仓库是公开的，不许把密码、IP、密钥提交进去。
+# 这个钩子每次提交前自动扫一遍暂存区，发现问题就挡住。
+#
+# 时间紧可以 --no-verify 绕过，但请先想清楚:
+# 一旦推上去，IP 就永久留在 git 历史里了，清理要重写历史。
+
+echo ""
+echo "[pre-commit] 检查敏感信息..."
+
+if command -v pwsh >/dev/null 2>&1; then
+    PW=pwsh
+elif command -v powershell >/dev/null 2>&1; then
+    PW=powershell
+else
+    echo "[pre-commit] 找不到 PowerShell，跳过检查" >&2
+    exit 0
+fi
+
+"$PW" -NoProfile -ExecutionPolicy Bypass -File scripts/check-secrets.ps1 -Staged
+RC=$?
+
+if [ $RC -ne 0 ]; then
+    echo ""
+    echo "[pre-commit] ❌ 提交被拦下：上面的内容需要先处理掉" >&2
+    echo "             修完重新 git add 再提交。" >&2
+    echo "             (确认是误报可以 git commit --no-verify 绕过)" >&2
+    exit 1
+fi
+
+exit 0
