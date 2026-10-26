@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>页面不存在 — Daybreak 破晓启动器</title>
+<meta name="robots" content="noindex">
+<link rel="icon" href="/assets/icon-256.png">
+<style>
+  :root {
+    --night: #0E1220;
+    --ember: #FF8A3D;
+    --mist: #C9CFE0;
+    --dim: #6E7694;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; height: 100%;
+    background: var(--night);
+    color: var(--mist);
+    font-family: -apple-system, "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+  }
+  body {
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    text-align: center; padding: 24px;
+    background:
+      radial-gradient(900px 500px at 50% 118%, rgba(255,138,61,.16), transparent 70%),
+      radial-gradient(700px 420px at 82% -12%, rgba(244,81,127,.12), transparent 70%),
+      var(--night);
+  }
+  .code {
+    font-size: 92px; font-weight: 800; line-height: 1;
+    color: var(--ember); letter-spacing: -.03em;
+  }
+  h1 { font-size: 22px; font-weight: 600; margin: 18px 0 10px; color: #fff; }
+  p { color: var(--dim); margin: 0 0 28px; font-size: 15px; line-height: 1.7; }
+  a {
+    display: inline-block; padding: 11px 26px; border-radius: 999px;
+    background: linear-gradient(135deg, var(--ember), #F4517F);
+    color: #1a0e06; font-weight: 700; text-decoration: none; font-size: 15px;
+  }
+  a:hover { filter: brightness(1.08); }
+</style>
+</head>
+<body>
+  <div class="code">404</div>
+  <h1>这个页面不存在</h1>
+  <p>可能是链接打错了，或者页面已经挪走。<br>回首页看看吧。</p>
+  <a href="/">回到首页</a>
+</body>
+</html>

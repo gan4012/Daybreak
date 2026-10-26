@@ -57,8 +57,16 @@ Remove-Item $tar -Force -ErrorAction SilentlyContinue
 
 Push-Location $repoRoot
 try {
-    # 排除本地审阅产物与部署密钥
+    # 排除不该公开的东西:
+    #   _preview    本地审阅产物
+    #   deploy      部署脚本(含服务器地址)
+    #   scripts     开发脚本(字体子集、截图、审阅页生成)
+    #   *.md        文档
+    #   .assetsignore / _headers   Cloudflare 专用，nginx 上没用还会被当普通文件访问
+    #   __pycache__ Python 缓存
     & tar -czf $tar --exclude="_preview" --exclude="__pycache__" --exclude="deploy" `
+        --exclude="scripts" --exclude="*.md" `
+        --exclude=".assetsignore" --exclude="_headers" `
         -C $repoRoot $siteName
 } finally {
     Pop-Location
