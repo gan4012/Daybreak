@@ -35,3 +35,11 @@ website/_preview/
 
 # 分发包的校验文件属于构建产物
 *.sha256
+
+# 演示视频的录屏素材与生成物(体积大、可重新生成)
+docs/video/配音输出/
+docs/video/clips/
+docs/video/_test/
+*.mp4
+*.srt
+!docs/video/script-*.txt
