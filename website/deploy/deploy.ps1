@@ -18,6 +18,10 @@ param(
 $ErrorActionPreference = "Stop"
 
 # ---- 解析服务器地址 ----
+# 支持两种写法:
+#   user@host        —— 直连，用 -KeyPath 指定的私钥
+#   <ssh config 别名> —— 交给 ssh/scp 自己按 ~/.ssh/config 处理
+#                        (香港那台本机 22 端口不通，配置里写了 ProxyCommand 走跳板)
 if (-not $Server) { $Server = $env:DAYBREAK_SERVER }
 if (-not $Server) {
     $f = Join-Path $PSScriptRoot "server.txt"
@@ -28,13 +32,23 @@ if (-not $Server) {
 }
 if (-not $Server) {
     Write-Host "没有服务器地址。" -ForegroundColor Red
-    Write-Host "  方式1: 设置环境变量 DAYBREAK_SERVER=用户@主机"
-    Write-Host "  方式2: 在 website\deploy\server.txt 里写一行 用户@主机"
+    Write-Host "  方式1: 设置环境变量 DAYBREAK_SERVER=用户@主机 或 =ssh别名"
+    Write-Host "  方式2: 在 website\deploy\server.txt 里写一行"
     exit 1
 }
-if (-not (Test-Path $KeyPath)) {
-    Write-Host "找不到私钥: $KeyPath" -ForegroundColor Red
-    exit 1
+
+# 是别名就不加 -i，让 ssh config 生效
+$isAlias = ($Server -notmatch "@")
+$keyArgs = @()
+if (-not $isAlias) {
+    if (-not (Test-Path $KeyPath)) {
+        Write-Host "找不到私钥: $KeyPath" -ForegroundColor Red
+        exit 1
+    }
+    $keyArgs = @("-i", $KeyPath)
+}
+else {
+    Write-Host "==> 使用 ssh 配置别名: $Server"
 }
 
 # ---- 路径 ----
@@ -113,7 +127,8 @@ $bash = $bashTemplate.Replace("__SITE__", $siteName).Replace("__REMOTE__", $Remo
 $bash = $bash -replace "`r", ""
 $b64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($bash))
 
-& ssh -i $KeyPath -o StrictHostKeyChecking=accept-new $Server "echo $b64 | base64 -d | bash"
+if ($isAlias) { & ssh -o StrictHostKeyChecking=accept-new $Server "echo $b64 | base64 -d | bash" }
+else { & ssh -i $KeyPath -o StrictHostKeyChecking=accept-new $Server "echo $b64 | base64 -d | bash" }
 if ($LASTEXITCODE -ne 0) { throw "远端部署失败" }
 
 $hostOnly = ($Server -split "@")[-1]
