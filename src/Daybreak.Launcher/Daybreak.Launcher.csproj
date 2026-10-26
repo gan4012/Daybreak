@@ -12,7 +12,7 @@
     本地开发若缺失,联机页会明确提示"组件缺失"而不是静默失败。
   -->
   <ItemGroup>
-    <Content Include="..\third_party\easytier\**\*">
+    <Content Include="..\..\third_party\easytier\**\*">
       <Link>easytier\%(RecursiveDir)%(Filename)%(Extension)</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <!--

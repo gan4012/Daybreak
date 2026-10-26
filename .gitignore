@@ -1,52 +1,52 @@
+# ---- 构建产物 ----
 bin/
 obj/
 publish/
+publish-beta/
+trim-test/
+updater-tmp/
+dist/
 *.user
 .vs/
 .vscode/
 .idea/
 *.log
-publish-beta/
 *.zip
+*.sha256
 
-trim-test/
-updater-tmp/
-
-# 实机验证产物(截图、测试结果),不属于源码
+# ---- 实机验证产物 ----
 app.png
 TestResults/
 *.trx
 
-# EasyTier 二进制不进 git(约 24MB),只保留许可证与说明文本。
+# ---- EasyTier 二进制 ----
+# 约 24MB，不进 git，只保留许可证与说明文本。
 # scripts/package.ps1 会在打包前自动检测/下载。
 third_party/easytier/*.exe
 third_party/easytier/*.dll
 third_party/easytier/*.sys
 
-# 中继节点地址:不进 git,避免公开仓库里公示自建服务器
+# 中继节点地址：不进 git，避免公开仓库里公示自建服务器
 third_party/easytier/relay.txt
 
-# 官网:部署脚本里的服务器地址与本地审阅产物都不进 git
+# ---- 官网 ----
+# 部署脚本里的服务器地址与本地审阅产物都不进 git
 website/deploy/server.txt
 website/_preview/
 
-# 图标生成的预览帧(可由 scripts/make-icon.py 重新导出)
+# ---- 图标生成 ----
 **/_icon-preview/
 
-# 分发包的校验文件属于构建产物
-*.sha256
-
-# 演示视频的录屏素材与生成物(体积大、可重新生成)
-docs/video/配音输出*/
-docs/video/clips/
-docs/video/_test/
+# ---- 视频制作 ----
+# 录屏素材与生成物体积大、可重新生成，不进 git
+video/clips/
+video/_test/
+video/_frames/
+video/_check/
+video/粗剪/
+video/配音输出*/
+video/剪映素材包/
 *.mp4
 *.srt
-!docs/video/script-*.txt
-
-docs/video/_frames/
-docs/video/_check/
-docs/video/粗剪/
-
-# 整理好的视频资料包(体积大，本地用)
-视频素材/
+# 但文案脚本要留（改文案能重新生成配音）
+!video/script-*.txt

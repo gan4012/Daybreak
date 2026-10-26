@@ -88,7 +88,7 @@ dotnet test Daybreak.slnx -c Debug
 dotnet test Daybreak.slnx -c Debug --filter "Category!=Integration"
 
 # 运行
-cd Daybreak.Launcher/bin/Debug/net10.0-windows; ./Daybreak.Launcher.exe
+cd src/Daybreak.Launcher/bin/Debug/net10.0-windows; ./Daybreak.Launcher.exe
 
 # 打包内测 zip（自包含单文件 + 更新器 + 联机组件 + 使用说明）
 powershell -File scripts/package.ps1

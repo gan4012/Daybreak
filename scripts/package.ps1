@@ -16,6 +16,10 @@ $outDir = Join-Path $root "publish-beta"
 # 导致自更新器按文件名匹配资产失败
 $zipName = "Daybreak-beta-win-x64.zip"
 
+# 产物统一放 dist/，和仓库根目录的代码分开
+$distDir = Join-Path $root "dist"
+if (-not (Test-Path $distDir)) { New-Item -ItemType Directory -Path $distDir -Force | Out-Null }
+
 # ---- EasyTier 联机组件 ----
 # 二进制不进 git(约 24MB),新克隆的仓库里 third_party/easytier 只有许可证文本。
 # 这里负责在打包前补齐,否则打出来的包缺失联机功能。
@@ -78,7 +82,7 @@ if (Test-Path $outDir) { Remove-Item $outDir -Recurse -Force }
 
 Write-Host "==> dotnet publish (self-contained: $SelfContained)" -ForegroundColor Cyan
 $singleFile = if ($SelfContained) { "true" } else { "false" }
-dotnet publish Daybreak.Launcher -c Release -r win-x64 `
+dotnet publish src\Daybreak.Launcher -c Release -r win-x64 `
     --self-contained:$SelfContained `
     -p:PublishSingleFile=$singleFile `
     -p:IncludeNativeLibrariesForSelfExtract=$singleFile `
@@ -120,7 +124,7 @@ if (Test-Path $etDir) {
 Write-Host "==> dotnet publish 更新器" -ForegroundColor Cyan
 $updaterTmp = Join-Path $root "updater-tmp"
 if (Test-Path $updaterTmp) { Remove-Item $updaterTmp -Recurse -Force }
-dotnet publish Daybreak.Updater -c Release -r win-x64 `
+dotnet publish src\Daybreak.Updater -c Release -r win-x64 `
     --self-contained:$SelfContained `
     -p:PublishSingleFile=$singleFile `
     -p:IncludeNativeLibrariesForSelfExtract=$singleFile `
@@ -203,7 +207,7 @@ logs\                   运行日志,反馈问题时请一并提供
 '@ | Out-File -FilePath (Join-Path $outDir "使用说明.txt") -Encoding utf8
 
 Write-Host "==> 压缩打包" -ForegroundColor Cyan
-$zipPath = Join-Path $root $zipName
+$zipPath = Join-Path $distDir $zipName
 if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
 Compress-Archive -Path (Join-Path $outDir "*") -DestinationPath $zipPath
 

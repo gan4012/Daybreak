@@ -1,7 +1,7 @@
 <Solution>
-  <Project Path="Daybreak.Core.Tests/Daybreak.Core.Tests.csproj" />
-  <Project Path="Daybreak.Core/Daybreak.Core.csproj" />
-  <Project Path="Daybreak.Launcher/Daybreak.Launcher.csproj" />
-  <Project Path="Daybreak.Market/Daybreak.Market.csproj" />
-  <Project Path="Daybreak.Updater/Daybreak.Updater.csproj" />
+  <Project Path="src/Daybreak.Core.Tests/Daybreak.Core.Tests.csproj" />
+  <Project Path="src/Daybreak.Core/Daybreak.Core.csproj" />
+  <Project Path="src/Daybreak.Launcher/Daybreak.Launcher.csproj" />
+  <Project Path="src/Daybreak.Market/Daybreak.Market.csproj" />
+  <Project Path="src/Daybreak.Updater/Daybreak.Updater.csproj" />
 </Solution>

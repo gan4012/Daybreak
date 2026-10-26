@@ -22,7 +22,7 @@ dotnet test Daybreak.slnx -c Debug --no-build
 dotnet test Daybreak.slnx -c Debug --no-build --filter "Category!=Integration"
 
 # 实机运行
-cd Daybreak.Launcher/bin/Debug/net10.0-windows && ./Daybreak.Launcher.exe
+cd src/Daybreak.Launcher/bin/Debug/net10.0-windows && ./Daybreak.Launcher.exe
 
 # 内测包打包(自包含单文件 + 使用说明 → zip)
 powershell -File scripts/package.ps1
@@ -63,11 +63,12 @@ powershell -File scripts/package.ps1
 
 ```
 Daybreak.slnx(.NET 10 新格式解决方案)
-├── Daybreak.Launcher      # WPF 主程序:Views(Pages)/ViewModels/Services/Themes
-├── Daybreak.Core          # 启动核心:Game/Auth/Mod/Market/Diagnostics/Storage,不依赖 UI
-├── Daybreak.Market        # Modrinth 客户端(预留扩展)
-├── Daybreak.Updater       # 独立更新器:--check/--update;不引用 Core,发布时裁剪(11.5MB)
-└── Daybreak.Core.Tests    # xUnit(离线桩 + 联网集成测试分文件)
+└── src/
+    ├── Daybreak.Launcher      # WPF 主程序:Views(Pages)/ViewModels/Services/Themes
+    ├── Daybreak.Core          # 启动核心:Game/Auth/Mod/Market/Diagnostics/Storage,不依赖 UI
+    ├── Daybreak.Market        # Modrinth 客户端(预留扩展)
+    ├── Daybreak.Updater       # 独立更新器:--check/--update;不引用 Core,发布时裁剪(11.5MB)
+    └── Daybreak.Core.Tests    # xUnit(离线桩 + 联网集成测试分文件)
 ```
 
 - **UI 与核心彻底分离**:Core 不引用任何 WPF 类型;VM 通过 `App.GetService<T>()`(MSDI)取依赖。
@@ -198,13 +199,13 @@ Daybreak.slnx(.NET 10 新格式解决方案)
 
 ## 实机验证工作流
 
-辅助脚本(仓库根):
-- `capture.ps1` — 按 Daybreak 窗口矩形截图(勿全屏,会拍到用户桌面)
-- `click.ps1 -dx x -dy y` — 窗口相对坐标点击
-- `hover.ps1` / `uia-invoke.ps1 -name "按钮名"` — 悬停与 UIA 调用(部分 WPF-UI 按钮鼠标模拟无效时用)
-- `nav-settings.ps1` / `dump-uia.ps1` — UIA 树诊断
+辅助脚本(`tools/`):
+- `tools/capture.ps1` — 按 Daybreak 窗口矩形截图(勿全屏,会拍到用户桌面)
+- `tools/click.ps1 -dx x -dy y` — 窗口相对坐标点击
+- `tools/hover.ps1` / `tools/uia-invoke.ps1 -name "按钮名"` — 悬停与 UIA 调用(部分 WPF-UI 按钮鼠标模拟无效时用)
+- `tools/nav-settings.ps1` / `tools/dump-uia.ps1` — UIA 树诊断
 
-流程:杀进程 → build → 启动 → click/hover/UIA → capture.ps1 → Read app.png。
+流程:杀进程 → build → 启动 → click/hover/UIA → tools/capture.ps1 → Read app.png。
 验证后必须 Stop-Process 杀掉实例再构建(文件锁)。
 
 ## 当前进度(2026-10-26)
@@ -274,7 +275,7 @@ Daybreak.slnx(.NET 10 新格式解决方案)
 
 1. 读完本文件 + 相关模块源码
 2. 改 Core 层先跑 `dotnet test`(勿在启动器运行时构建,文件锁)
-3. 改 UI 后必须实机截图验证(capture.ps1),不能只看编译通过
+3. 改 UI 后必须实机截图验证(tools/capture.ps1),不能只看编译通过
 4. 涉及下载/启动流程的改动,必须在控制台(engdbg 模式)或实机完整走一遍
 5. 新增第三方依赖先查许可证(MIT/Apache 才行),并更新 THIRD-PARTY-NOTICES.md
 
@@ -290,7 +291,7 @@ Daybreak.slnx(.NET 10 新格式解决方案)
   避免所有用户每次启动都吃 UAC、也避免游戏进程继承管理员身份。
 - **--no-tun 模式无法绑定虚拟 IP**:会被 os error 10049(地址无效) 拒绝,所以不能靠端口转发绕开管理员权限,
   必须走 TUN。端口转发(--port-forward)本身在 Windows 免管理员可用(已实测),但只能用于"连出去"的方向。
-- **提权窗口无法被自动化点击**:UIPI 会阻止非提权进程把提权窗口设为前台,click.ps1 / mouse_event 对它无效。
+- **提权窗口无法被自动化点击**:UIPI 会阻止非提权进程把提权窗口设为前台,tools/click.ps1 / mouse_event 对它无效。
   验证提权后的功能要么手工点,要么用 Start-Process -Verb RunAs 直接以管理员启动。
 - **房间号不落明文到网络名**:最初把房间号直接拼进 network-name(dbk-123456),
   这会让中继节点上能看到别人的房间号。现改为用 HMAC 分别派生 name 和 secret(不同标签,防止名字成为密钥前缀)。

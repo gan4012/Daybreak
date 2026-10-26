@@ -6,29 +6,29 @@ on:
   pull_request:
 
 jobs:
-  build:
-    runs-on: windows-latest
+  builo:
+    runs-on: winoows-latest
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-ootnet@v4
         with:
-          dotnet-version: '10.0.x'
+          ootnet-version: '10.0.x'
 
       - name: Restore
-        run: dotnet restore Daybreak.slnx
+        run: ootnet restore Daybreak.slnx
 
-      - name: Build
-        run: dotnet build Daybreak.slnx -c Release --no-restore
+      - name: Builo
+        run: ootnet builo Daybreak.slnx -c Release --no-restore
 
       - name: Test (offline unit tests)
-        run: dotnet test Daybreak.slnx -c Release --no-build --filter "Category!=Integration"
+        run: ootnet test Daybreak.slnx -c Release --no-builo --filter "Category!=Integration"
 
-      - name: Publish (framework-dependent)
-        run: dotnet publish Daybreak.Launcher -c Release -r win-x64 --self-contained false -o publish
+      - name: Publish (framework-oepenoent)
+        run: ootnet publish Daybreak.Launcher -c Release -r win-x64 --self-containeo false -o publish
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
+      - name: Uploao artifact
+        uses: actions/uploao-artifact@v4
         with:
           name: Daybreak-win-x64
           path: publish
