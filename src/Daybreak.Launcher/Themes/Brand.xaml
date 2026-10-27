@@ -116,6 +116,70 @@
             </Setter.Value>
         </Setter>
     </Style>
+
+    <!-- ===== 首页「启动游戏」按钮 =====
+         首页有三个按钮:刷新、下载 Java、启动游戏。
+         前两个是次要操作(ui:Button 普通样式)，启动是主操作。
+         原来的 BrandPrimaryButton 和它们尺寸接近，主次不分，
+         用户反馈"找不到启动按钮"。
+
+         这个样式在 BrandPrimaryButton 基础上:
+           · 更大(MinWidth 170 / MinHeight 46，原来是 140/36 左右)
+           · 字更大更粗(FontSize 15 / Bold)
+           · 圆角 14(原模板硬编码 12，所以这里要重写模板)
+           · 加橙色外发光，把视线拉过去
+         配色仍走 BrandButtonBrush，不引入新色。 -->
+    <Style x:Key="BrandLaunchButton" TargetType="Button">
+        <Setter Property="Background" Value="{StaticResource BrandButtonBrush}" />
+        <Setter Property="Foreground" Value="White" />
+        <Setter Property="BorderBrush" Value="{StaticResource GlassRimBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Padding" Value="24,12" />
+        <Setter Property="FontSize" Value="15" />
+        <Setter Property="FontWeight" Value="Bold" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="MinWidth" Value="170" />
+        <Setter Property="MinHeight" Value="46" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border
+                        x:Name="Root"
+                        Background="{TemplateBinding Background}"
+                        BorderBrush="{TemplateBinding BorderBrush}"
+                        BorderThickness="{TemplateBinding BorderThickness}"
+                        CornerRadius="14"
+                        Padding="{TemplateBinding Padding}">
+                        <Border.Effect>
+                            <DropShadowEffect
+                                Color="#FF8A3D"
+                                BlurRadius="18"
+                                ShadowDepth="0"
+                                Opacity="0.45" />
+                        </Border.Effect>
+                        <ContentPresenter
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center"
+                            RecognizesAccessKey="True"
+                            SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Root" Property="Background" Value="{StaticResource BrandButtonHoverBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="Root" Property="Opacity" Value="0.85" />
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="Root" Property="Opacity" Value="0.45" />
+                            <!-- 禁用时收起发光，避免"看起来还能点" -->
+                            <Setter TargetName="Root" Property="Effect" Value="{x:Null}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
     <!-- ===== 侧边栏导航项 =====
          平时完全透明,悬停微亮,选中出现暖色玻璃药丸;不加边框和投影,避免"一摞卡片"感 -->
     <SolidColorBrush x:Key="NavigationViewItemBackground" Color="#00FFFFFF" />
