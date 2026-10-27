@@ -64,15 +64,32 @@
 - 🇨🇳 [Gitee 发行版](https://gitee.com/wergansailikebai/daybreak/releases) — 国内直连，实测约 1.5 MB/s
 - 🌐 [GitHub Releases](https://github.com/gan4012/Daybreak/releases) — 海外或已有代理时使用
 
+有两种装法，**功能完全一样**，挑一个顺手的：
+
+### 方式一：安装包
+
+下载 `Daybreak-Setup-<版本>.exe`，双击 → 下一步 → 完成。
+
+- **不需要管理员权限**，装在 `%LOCALAPPDATA%\Daybreak`（可以自己改路径）
+- 自动创建开始菜单快捷方式（桌面快捷方式默认不勾，想要可以勾上）
+- 卸载走 Windows 设置里的「应用」，**不会删你的配置和存档**
+
+### 方式二：绿色包
+
 下载 `Daybreak-beta-win-x64.zip`：
 
 - 自包含单文件，**无需安装 .NET 运行时**
 - 解压到任意目录，双击 `Daybreak.Launcher.exe` 即可
 - 目录里的 `easytier/` 是联机组件，**请勿删除**，否则联机功能不可用
 
+### 共同说明
+
 首次启动游戏会自动下载匹配的 Java 运行时与游戏资源（数百 MB，取决于版本），请耐心等待。
 
 启动器内置更新器：**优先从 Gitee 检查与下载更新**，Gitee 不可用时自动回退 GitHub。
+两种装法都支持，行为一致。
+
+细节和常见问题见 [安装包说明](docs/安装包说明.md)。
 
 ## 从源码构建
 
