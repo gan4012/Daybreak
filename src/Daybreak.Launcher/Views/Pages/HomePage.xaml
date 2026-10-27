@@ -257,6 +257,7 @@
                                 <ui:SymbolIcon
                                     Symbol="Play24"
                                     Filled="True"
+                                    Foreground="White"
                                     FontSize="18"
                                     Margin="0,0,8,0"
                                     VerticalAlignment="Center" />

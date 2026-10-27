@@ -21,7 +21,10 @@
 param(
     [switch]$SkipBuild,
     # 只打印将要执行的命令，不真的打包
-    [switch]$DryRun
+    [switch]$DryRun,
+    # 必须打出安装包(CI 用)。找不到 Inno Setup 时直接失败而不是跳过，
+    # 否则 CI 会绿着跑完、Release 照发，但产物里没有安装包。
+    [switch]$RequireInstaller
 )
 
 $ErrorActionPreference = "Stop"
@@ -51,14 +54,18 @@ if (-not $SkipBuild) {
 
 $launcherExe = Join-Path $stagingDir "Daybreak.Launcher.exe"
 if (-not (Test-Path $launcherExe)) {
-    throw "找不到 $launcherExe`n请先跑 scripts/package.ps1，或去掉 -SkipBuild 参数。"
+    Write-Host "找不到 $launcherExe" -ForegroundColor Red
+    Write-Host "  请先跑 scripts/package.ps1，或去掉 -SkipBuild 参数。" -ForegroundColor Red
+    exit 1
 }
 
 # 联机组件必须齐全，否则装完联机不可用(这个坑在打包脚本里踩过一次)
 foreach ($f in @("easytier\easytier-core.exe", "easytier\relay.txt")) {
     $p = Join-Path $stagingDir $f
     if (-not (Test-Path $p)) {
-        throw "publish-beta 里缺 $f，打出来的安装包联机会不可用。请先跑 scripts/package.ps1。"
+        Write-Host "publish-beta 里缺 $f，打出来的安装包联机会不可用。" -ForegroundColor Red
+            Write-Host "  请先跑 scripts/package.ps1。" -ForegroundColor Red
+            exit 1
     }
 }
 Write-Host "==> publish-beta 检查通过(主程序 + 联机组件齐全)" -ForegroundColor Green
@@ -83,6 +90,12 @@ else {
 }
 
 if (-not $iscc) {
+    if ($RequireInstaller) {
+        Write-Host ""
+        Write-Host "找不到 Inno Setup 的 ISCC.exe，但指定了 -RequireInstaller。" -ForegroundColor Red
+        Write-Host "  安装: winget install --id JRSoftware.InnoSetup -e" -ForegroundColor Red
+        exit 2
+    }
     Write-Host ""
     Write-Host "没有找到 Inno Setup 的 ISCC.exe，跳过安装包生成。" -ForegroundColor Yellow
     Write-Host "  装一下(二选一):" -ForegroundColor Yellow
@@ -111,13 +124,19 @@ $exitCode = $LASTEXITCODE
 $output | ForEach-Object { Write-Host "  $_" }
 
 if ($exitCode -ne 0) {
-    throw "ISCC 打包失败(退出码 $exitCode)"
+    Write-Host ""
+    Write-Host "ISCC 打包失败，退出码 $exitCode" -ForegroundColor Red
+    # 透传 ISCC 的真实退出码，不要用 throw ——
+    # throw 在 powershell -File 下统一变成退出码 1，调用方区分不了
+    # "没装 Inno Setup"(0) 和 "ISCC 真失败"(非 0)。
+    exit $exitCode
 }
 
 # ---- 5. 结果 ----
 $setupExe = Join-Path $distDir "Daybreak-Setup-$version.exe"
 if (-not (Test-Path $setupExe)) {
-    throw "ISCC 报告成功，但找不到产物 $setupExe"
+    Write-Host "ISCC 报告成功，但找不到产物 $setupExe" -ForegroundColor Red
+    exit 1
 }
 
 $sizeMb = [math]::Round((Get-Item $setupExe).Length / 1MB, 1)

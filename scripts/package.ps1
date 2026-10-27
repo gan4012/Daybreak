@@ -164,7 +164,7 @@ easytier\               联机组件,**请勿删除**,删了联机功能就用�
 logs\                   运行日志,反馈问题时请一并提供
 
 【首次使用】
-1. 首页可保存离线账号(填玩家名 → 保存账号 → 开始游戏)
+1. 首页可保存离线账号(填玩家名 → 保存账号 → 启动游戏)
 2. 点「下载游戏」页安装一个游戏版本(建议先装正式版)
 3. 首次启动游戏会自动下载:
    - 匹配的 Java 运行时(自动选择版本)
@@ -249,13 +249,27 @@ Write-Host "    可直接双击: $releaseDir\Daybreak.Launcher.exe"
 # ---- 顺带生成安装包 ----
 # 两种"没打成"要区别对待:
 #   1. 机器上没装 Inno Setup —— 正常情况，提示一句就好，zip 已经好了，不影响成功
-#   2. ISCC 真的报错了 —— 必须让整个打包失败，否则用户以为安装包也打好了
-# package-installer.ps1 用退出码区分:没有 ISCC 返回 0，ISCC 失败抛异常(非 0)。
+#      (package-installer.ps1 对这种返回 0)
+#   2. ISCC 真的报错了 —— 必须让整个打包失败，否则 CI 的 Package 步骤变绿、
+#      Release 照发，但产物里根本没有安装包。
+#
+# 注意几个坑:
+#   · 要用 $PSHOME\powershell.exe 而不是裸 powershell —— 后者走 PATH 解析，
+#     可能被同名的别的东西劫持
+#   · 加 -NoProfile 避免用户 profile 里的输出污染退出码
+#   · 调用前把 $LASTEXITCODE 置空，否则子进程没设它时读到上一次的旧值
 $installerScript = Join-Path $PSScriptRoot "package-installer.ps1"
 if (Test-Path $installerScript) {
     Write-Host ""
-    & powershell -ExecutionPolicy Bypass -File $installerScript -SkipBuild
-    if ($LASTEXITCODE -ne 0) {
-        throw "安装包生成失败(退出码 $LASTEXITCODE)。绿色包 zip 已生成，但安装包没有。"
+    # CI 里必须打出安装包:GitHub Actions 会设置 $env:CI=true。
+    # 本地没装 Inno Setup 只是提示跳过，CI 里则直接失败。
+    $installerExtra = @()
+    if ($env:CI) { $installerExtra += "-RequireInstaller" }
+
+    $LASTEXITCODE = 0
+    & (Join-Path $PSHOME "powershell.exe") -NoProfile -ExecutionPolicy Bypass -File $installerScript -SkipBuild @installerExtra
+    $installerExit = $LASTEXITCODE
+    if ($installerExit -ne 0) {
+        throw "安装包生成失败(退出码 $installerExit)。绿色包 zip 已生成，但安装包没有。"
     }
 }

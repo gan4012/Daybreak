@@ -61,6 +61,16 @@ jobs:
           }
           Write-Host "中继地址已配置(长度 $($v.Length) 字符，格式校验通过)"
 
+      # 安装包需要 Inno Setup。package.ps1 在 CI 下会带 -RequireInstaller，
+      # 装不上就直接失败，不会静默跳过安装包。
+      - name: Install Inno Setup
+        shell: pwsh
+        run: |
+          choco install innosetup --no-progress -y
+          $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { throw "ISCC.exe 未找到: $iscc" }
+          Write-Host "ISCC: $iscc"
+
       - name: Package (self-contained single-file)
         shell: pwsh
         env:
@@ -72,7 +82,9 @@ jobs:
         with:
           name: Daybreak-win-x64
           # 包名必须全 ASCII:Release 上传会把非 ASCII 字符替换成 '.',使自更新器匹配失败
-          path: Daybreak-beta-win-x64.zip
+          path: |
+            dist/Daybreak-beta-win-x64.zip
+            dist/Daybreak-Setup-*.exe
           if-no-files-found: error
 
       # tag 推送 → 直接发布为正式 Release(draft=false)
@@ -83,7 +95,9 @@ jobs:
         with:
           tag_name: ${{ github.event.inputs.tag_name || github.ref_name }}
           name: ${{ github.event.inputs.tag_name || github.ref_name }}
-          files: Daybreak-beta-win-x64.zip
+          files: |
+            dist/Daybreak-beta-win-x64.zip
+            dist/Daybreak-Setup-*.exe
           draft: ${{ github.event.inputs.create_draft == 'true' }}
           generate_release_notes: true
           fail_on_unmatched_files: true

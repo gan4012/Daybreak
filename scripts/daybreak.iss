@@ -11,6 +11,8 @@
 ;   3. AppId 是固定 GUID —— 每次生成新的会导致升级时装出两份。
 ;   4. 卸载只删 {app}，绝不碰 %APPDATA%\Daybreak(配置/账号)
 ;      和游戏目录里的 daybreak-servers\(服务端实例) —— 那是用户的数据。
+;   5. 简体中文语言包内置在 scripts\innosetup\ 下(Inno 官方不内置中文)，
+;      保证任何机器/CI 打出来的向导都是中文。
 
 #ifndef MyAppVersion
   #define MyAppVersion "0.0.0"
@@ -28,9 +30,8 @@ AppName={#AppNameCN}
 AppVersion={#MyAppVersion}
 AppVerName={#AppNameCN} {#MyAppVersion}
 AppPublisher={#AppPublisher}
+; 安装目录可选(给想装到 D 盘的人)
 DefaultDirName={localappdata}\{#AppName}
-DefaultGroupName={#AppNameCN}
-DisableProgramGroupPage=yes
 DisableDirPage=no
 ; 不需要管理员权限。改成 admin 会让自更新失效。
 PrivilegesRequired=lowest
@@ -44,21 +45,22 @@ WizardStyle=modern
 UninstallDisplayName={#AppNameCN}
 UninstallDisplayIcon={app}\{#LauncherExe}
 SetupIconFile=..\src\Daybreak.Launcher\daybreak.ico
-; 允许覆盖安装在已有目录上（升级场景）
-AllowNoIcons=yes
 
 [Languages]
-Name: "chinesesimplified"; MessagesFile: "compiler:Default.isl"
+; 用仓库内置的中文语言包(见 scripts\innosetup\)。
+; 不要再改回 compiler:Default.isl —— 那是英文，向导按钮会变英文。
+Name: "chinesesimplified"; MessagesFile: "innosetup\ChineseSimplified.isl"
 
 [Tasks]
 ; 桌面快捷方式默认不勾:国内用户对"装完桌面多一个图标"容易反感
-Name: "desktopicon"; Description: "创建桌面快捷方式"; GroupDescription: "附加任务:"; Flags: unchecked
-; 开始菜单默认勾:绿色包最大的体验缺口就是没有它
-Name: "startmenuicon"; Description: "创建开始菜单快捷方式"; GroupDescription: "附加任务:"; Flags: checkedonce
+Name: "desktopicon"; Description: "创建桌面快捷方式"; GroupDescription: "附加任务:"
+; 开始菜单快捷方式默认勾:绿色包最大的体验缺口就是没有它
+Name: "startmenuicon"; Description: "创建开始菜单快捷方式"; GroupDescription: "附加任务:"
 
 [Files]
 ; 整个 publish-beta 目录(主程序、更新器、easytier/、使用说明.txt)
-Source: "..\publish-beta\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+; Excludes *.pdb:发布包不带调试符号，省体积也免得用户困惑
+Source: "..\publish-beta\*"; DestDir: "{app}"; Excludes: "*.pdb"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{userdesktop}\{#AppNameCN}"; Filename: "{app}\{#LauncherExe}"; Tasks: desktopicon
@@ -72,17 +74,3 @@ Filename: "{app}\{#LauncherExe}"; Description: "立即启动 {#AppNameCN}"; Flag
 ; 故意不删 %APPDATA%\Daybreak(配置与账号)和游戏目录里的服务端实例 ——
 ; 卸载程序删用户数据是恶习，而且删错了找不回来。
 Type: filesandordirs; Name: "{app}"
-
-[Code]
-// 安装前提示:如果检测到已存在的安装目录，说明是升级，
-// 提醒用户不要把它指到「绿色包解压出来的目录」上，避免混装。
-function InitializeSetup(): Boolean;
-begin
-  Result := True;
-end;
-
-procedure CurStepChanged(CurStep: TSetupStep);
-begin
-  // 安装完成后不做额外动作。快捷方式由 [Icons] 处理，
-  // 用户数据目录由主程序自己在首次运行时创建。
-end;
