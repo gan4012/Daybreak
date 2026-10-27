@@ -64,3 +64,6 @@ website/
 
 # 演示视频(素材、配音、剪映包、制作文档)
 video/
+
+# 计划执行的工作区(ledger、brief、review 包)属于临时产物
+.superpowers/
