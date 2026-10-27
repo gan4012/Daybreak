@@ -247,10 +247,15 @@ Write-Host "==> 发行目录已更新: $releaseDir ($relSize MB)" -ForegroundCol
 Write-Host "    可直接双击: $releaseDir\Daybreak.Launcher.exe"
 
 # ---- 顺带生成安装包 ----
-# 找不到 Inno Setup 时 package-installer.ps1 会打印提示并正常退出（返回 0），
-# 不会影响上面已经打好的 zip。
+# 两种"没打成"要区别对待:
+#   1. 机器上没装 Inno Setup —— 正常情况，提示一句就好，zip 已经好了，不影响成功
+#   2. ISCC 真的报错了 —— 必须让整个打包失败，否则用户以为安装包也打好了
+# package-installer.ps1 用退出码区分:没有 ISCC 返回 0，ISCC 失败抛异常(非 0)。
 $installerScript = Join-Path $PSScriptRoot "package-installer.ps1"
 if (Test-Path $installerScript) {
     Write-Host ""
     & powershell -ExecutionPolicy Bypass -File $installerScript -SkipBuild
+    if ($LASTEXITCODE -ne 0) {
+        throw "安装包生成失败(退出码 $LASTEXITCODE)。绿色包 zip 已生成，但安装包没有。"
+    }
 }
