@@ -245,3 +245,12 @@ Get-ChildItem $releaseDir -Filter "*.pdb" -ErrorAction SilentlyContinue | Remove
 $relSize = [math]::Round(((Get-ChildItem $releaseDir -File | Measure-Object Length -Sum).Sum / 1MB), 1)
 Write-Host "==> 发行目录已更新: $releaseDir ($relSize MB)" -ForegroundColor Green
 Write-Host "    可直接双击: $releaseDir\Daybreak.Launcher.exe"
+
+# ---- 顺带生成安装包 ----
+# 找不到 Inno Setup 时 package-installer.ps1 会打印提示并正常退出（返回 0），
+# 不会影响上面已经打好的 zip。
+$installerScript = Join-Path $PSScriptRoot "package-installer.ps1"
+if (Test-Path $installerScript) {
+    Write-Host ""
+    & powershell -ExecutionPolicy Bypass -File $installerScript -SkipBuild
+}
