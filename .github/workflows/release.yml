@@ -63,25 +63,83 @@ jobs:
 
       # 安装包需要 Inno Setup。package.ps1 在 CI 下会带 -RequireInstaller，
       # 装不上就直接失败，不会静默跳过安装包。
+      #
+      # 安装策略(按顺序尝试，任一成功即继续):
+      #   1. 已预装 → 直接用
+      #   2. GitHub Releases 官方安装程序 → runner 访问 GitHub 是内网级，最稳
+      #   3. choco 回退 → 社区源偶发超时，所以放最后
+      #
+      # 历史:Release #7/#8 连续两次卡在 choco install innosetup，已改用直链。
       - name: Install Inno Setup
         shell: pwsh
         run: |
-          choco install innosetup --no-progress -y
+          $iscc = "$env:ProgramFiles(x86)\Inno Setup 6\ISCC.exe"
 
-          # 诊断输出:把能找到的 ISCC 都列出来，失败时好排查
-          Write-Host "=== 查找 ISCC.exe ==="
-          $candidates = @(
-            "$env:ProgramFiles(x86)\Inno Setup 6\ISCC.exe",
-            "$env:ProgramFiles\Inno Setup 6\ISCC.exe",
-            "C:\ProgramData\chocolatey\bin\ISCC.exe"
-          )
-          foreach ($c in $candidates) {
-            Write-Host ("  {0} -> {1}" -f $c, (Test-Path $c))
+          if (Test-Path $iscc) {
+            Write-Host "✅ 已预装: $iscc"
+            exit 0
           }
-          $native = "$env:ProgramFiles(x86)\Inno Setup 6\ISCC.exe"
-          if (-not (Test-Path $native)) { throw "ISCC.exe 未找到: $native" }
-          Write-Host "使用原生路径: $native"
-          & $native | Select-Object -First 3
+
+          function Test-IsccReady {
+            return (Test-Path "$env:ProgramFiles(x86)\Inno Setup 6\ISCC.exe")
+          }
+
+          # ---- 方式 1:GitHub Releases 官方安装程序 ----
+          $url = "https://github.com/jrsoftware/issrc/releases/download/is-6_7_4/innosetup-6.7.4.exe"
+          $installer = Join-Path $env:RUNNER_TEMP "innosetup.exe"
+          try {
+            Write-Host "尝试 1: 从 GitHub Releases 下载 [$url]"
+            Invoke-WebRequest -Uri $url -OutFile $installer -UseBasicParsing -MaximumRedirection 5 -TimeoutSec 180
+            $sz = (Get-Item $installer).Length
+            Write-Host "  下载完成: $([math]::Round($sz/1MB,1)) MB"
+            if ($sz -lt 500KB) { throw "下载的文件太小($sz 字节)，可能不是安装程序" }
+
+            Write-Host "  静默安装..."
+            $p = Start-Process -FilePath $installer `
+              -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART","/SP-" `
+              -Wait -PassThru
+            Write-Host "  安装程序退出码: $($p.ExitCode)"
+            if (Test-IsccReady) {
+              Write-Host "✅ Inno Setup 安装成功: $iscc"
+              & $iscc | Select-Object -First 2
+              exit 0
+            }
+            Write-Host "  ⚠️ 安装程序跑完了但没找到 ISCC.exe，继续尝试其它方式"
+          }
+          catch {
+            Write-Host "  ⚠️ 方式 1 失败: $($_.Exception.Message)"
+          }
+
+          # ---- 方式 2:choco 回退 ----
+          try {
+            Write-Host "尝试 2: choco install innosetup"
+            choco install innosetup --no-progress -y --force 2>&1 | Write-Host
+            if (Test-IsccReady) {
+              Write-Host "✅ Inno Setup 安装成功: $iscc"
+              & $iscc | Select-Object -First 2
+              exit 0
+            }
+            Write-Host "  ⚠️ choco 装完但没找到 ISCC.exe"
+          }
+          catch {
+            Write-Host "  ⚠️ 方式 2 失败: $($_.Exception.Message)"
+          }
+
+          # ---- 都失败:把现场信息打出来再失败 ----
+          Write-Host ""
+          Write-Host "=== 两种方式都失败，现场信息 ==="
+          @(
+            "$env:ProgramFiles(x86)\Inno Setup 6",
+            "$env:ProgramFiles\Inno Setup 6",
+            "C:\ProgramData\chocolatey\bin"
+          ) | ForEach-Object {
+            Write-Host ("  {0} -> {1}" -f $_, (Test-Path $_))
+            if (Test-Path $_) {
+              Get-ChildItem $_ -Filter "ISCC.exe" -Recurse -ErrorAction SilentlyContinue |
+                ForEach-Object { Write-Host "      找到 ISCC: $($_.FullName)" }
+            }
+          }
+          throw "Inno Setup 安装失败。安装包无法生成。"
 
       - name: Package (self-contained single-file)
         shell: pwsh
