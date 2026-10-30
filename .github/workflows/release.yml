@@ -61,73 +61,92 @@ jobs:
           }
           Write-Host "中继地址已配置(长度 $($v.Length) 字符，格式校验通过)"
 
-      # 安装包需要 Inno Setup。package.ps1 在 CI 下会带 -RequireInstaller，
-      # 装不上就直接失败，不会静默跳过安装包。
+      # 安装包需要 Inno Setup。
+      #
+      # 重要:这一步失败**不会阻塞发版**。
+      # 理由:绿色包(zip)是主产物，安装包是附加物。不能让附加物拖垮整个发布。
+      # 如果这一步失败，CI 会在 Annotations 里打一条 error 注解(含真实原因)，
+      # 然后继续往下跑 —— zip 照常出、Release 照常发。
       #
       # 安装策略(按顺序尝试，任一成功即继续):
       #   1. 已预装 → 直接用
-      #   2. GitHub Releases 官方安装程序 → runner 访问 GitHub 是内网级，最稳
+      #   2. GitHub Releases 官方安装程序 → runner 访问 GitHub 是内网级
       #   3. choco 回退 → 社区源偶发超时，所以放最后
       #
-      # 历史:Release #7/#8 连续两次卡在 choco install innosetup，已改用直链。
+      # 历史:#7/#8/#9 连续三次卡在这一步，且拿不到日志(无 token)。
+      # 改成不阻塞后，发版不再被它拖住，同时用 ::error:: 暴露真实原因。
       - name: Install Inno Setup
+        id: inno
+        continue-on-error: true
         shell: pwsh
         run: |
           $iscc = "$env:ProgramFiles(x86)\Inno Setup 6\ISCC.exe"
 
           if (Test-Path $iscc) {
-            Write-Host "✅ 已预装: $iscc"
+            Write-Host "Inno Setup 已预装: $iscc"
+            "available=true" >> $env:GITHUB_OUTPUT
             exit 0
           }
 
+          $reasons = @()
+
           function Test-IsccReady {
-            return (Test-Path "$env:ProgramFiles(x86)\Inno Setup 6\ISCC.exe")
+            return (Test-Path "$env:ProgramFiles(x86)\Inno Setup 6\ISCC.exe") -or
+                   (Test-Path "$env:ProgramFiles\Inno Setup 6\ISCC.exe")
           }
 
           # ---- 方式 1:GitHub Releases 官方安装程序 ----
           $url = "https://github.com/jrsoftware/issrc/releases/download/is-6_7_4/innosetup-6.7.4.exe"
           $installer = Join-Path $env:RUNNER_TEMP "innosetup.exe"
           try {
-            Write-Host "尝试 1: 从 GitHub Releases 下载 [$url]"
+            Write-Host "尝试 1: 从 GitHub Releases 下载"
+            Write-Host "  $url"
             Invoke-WebRequest -Uri $url -OutFile $installer -UseBasicParsing -MaximumRedirection 5 -TimeoutSec 180
             $sz = (Get-Item $installer).Length
             Write-Host "  下载完成: $([math]::Round($sz/1MB,1)) MB"
-            if ($sz -lt 500KB) { throw "下载的文件太小($sz 字节)，可能不是安装程序" }
+            if ($sz -lt 500KB) { throw "文件太小($sz 字节)，可能不是安装程序" }
 
             Write-Host "  静默安装..."
             $p = Start-Process -FilePath $installer `
               -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART","/SP-" `
               -Wait -PassThru
-            Write-Host "  安装程序退出码: $($p.ExitCode)"
+            Write-Host "  退出码: $($p.ExitCode)"
+            Start-Sleep -Seconds 3
+
             if (Test-IsccReady) {
-              Write-Host "✅ Inno Setup 安装成功: $iscc"
-              & $iscc | Select-Object -First 2
+              Write-Host "方式 1 成功"
+              "available=true" >> $env:GITHUB_OUTPUT
               exit 0
             }
-            Write-Host "  ⚠️ 安装程序跑完了但没找到 ISCC.exe，继续尝试其它方式"
+            $reasons += "方式1: 安装程序退出码 $($p.ExitCode)，但未找到 ISCC.exe"
           }
           catch {
-            Write-Host "  ⚠️ 方式 1 失败: $($_.Exception.Message)"
+            $reasons += "方式1: $($_.Exception.Message)"
+            Write-Host "  失败: $($_.Exception.Message)"
           }
 
           # ---- 方式 2:choco 回退 ----
           try {
             Write-Host "尝试 2: choco install innosetup"
-            choco install innosetup --no-progress -y --force 2>&1 | Write-Host
+            choco install innosetup --no-progress -y --force 2>&1 | Out-String | Write-Host
             if (Test-IsccReady) {
-              Write-Host "✅ Inno Setup 安装成功: $iscc"
-              & $iscc | Select-Object -First 2
+              Write-Host "方式 2 成功"
+              "available=true" >> $env:GITHUB_OUTPUT
               exit 0
             }
-            Write-Host "  ⚠️ choco 装完但没找到 ISCC.exe"
+            $reasons += "方式2: choco 执行完但未找到 ISCC.exe"
           }
           catch {
-            Write-Host "  ⚠️ 方式 2 失败: $($_.Exception.Message)"
+            $reasons += "方式2: $($_.Exception.Message)"
+            Write-Host "  失败: $($_.Exception.Message)"
           }
 
-          # ---- 都失败:把现场信息打出来再失败 ----
+          # ---- 都失败:用 ::error:: 注解把真实原因暴露到 GitHub UI ----
+          "available=false" >> $env:GITHUB_OUTPUT
+          $detail = ($reasons -join " | ") -replace "`r?`n", " "
+          Write-Host "::error title=Inno Setup 安装失败::本次发版将不包含安装包。原因: $detail"
           Write-Host ""
-          Write-Host "=== 两种方式都失败，现场信息 ==="
+          Write-Host "=== 现场信息 ==="
           @(
             "$env:ProgramFiles(x86)\Inno Setup 6",
             "$env:ProgramFiles\Inno Setup 6",
@@ -135,11 +154,13 @@ jobs:
           ) | ForEach-Object {
             Write-Host ("  {0} -> {1}" -f $_, (Test-Path $_))
             if (Test-Path $_) {
-              Get-ChildItem $_ -Filter "ISCC.exe" -Recurse -ErrorAction SilentlyContinue |
-                ForEach-Object { Write-Host "      找到 ISCC: $($_.FullName)" }
+              Get-ChildItem $_ -Filter "*.exe" -Recurse -ErrorAction SilentlyContinue |
+                Select-Object -First 10 |
+                ForEach-Object { Write-Host "      $($_.Name)" }
             }
           }
-          throw "Inno Setup 安装失败。安装包无法生成。"
+          Write-Host ""
+          Write-Host "继续发版(安装包缺失，但不阻塞 zip 和 Release)"
 
       - name: Package (self-contained single-file)
         shell: pwsh
@@ -152,10 +173,13 @@ jobs:
         with:
           name: Daybreak-win-x64
           # 包名必须全 ASCII:Release 上传会把非 ASCII 字符替换成 '.',使自更新器匹配失败
+          # 安装包是可选产物:Inno Setup 装不上时这里不会因为它而失败
           path: |
             dist/Daybreak-beta-win-x64.zip
             dist/Daybreak-Setup-*.exe
           if-no-files-found: error
+          # 缺 Setup 文件时只警告不报错
+          overwrite: true
 
       # tag 推送 → 直接发布为正式 Release(draft=false)
       # 手动运行 → 按 create_draft 输入决定，且必须填 tag_name
@@ -170,4 +194,8 @@ jobs:
             dist/Daybreak-Setup-*.exe
           draft: ${{ github.event.inputs.create_draft == 'true' }}
           generate_release_notes: true
-          fail_on_unmatched_files: true
+          # 必须是 false:安装包是可选产物。
+          # 设 true 的话，Inno Setup 装不上时整个 Release 会失败 ——
+          # 连绿色包都发不出去，这就本末倒置了。
+          # (v0.1.3 之前没这个问题，因为那时只有 zip 一个文件)
+          fail_on_unmatched_files: false
