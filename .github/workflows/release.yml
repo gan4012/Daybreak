@@ -67,9 +67,21 @@ jobs:
         shell: pwsh
         run: |
           choco install innosetup --no-progress -y
-          $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
-          if (-not (Test-Path $iscc)) { throw "ISCC.exe 未找到: $iscc" }
-          Write-Host "ISCC: $iscc"
+
+          # 诊断输出:把能找到的 ISCC 都列出来，失败时好排查
+          Write-Host "=== 查找 ISCC.exe ==="
+          $candidates = @(
+            "$env:ProgramFiles(x86)\Inno Setup 6\ISCC.exe",
+            "$env:ProgramFiles\Inno Setup 6\ISCC.exe",
+            "C:\ProgramData\chocolatey\bin\ISCC.exe"
+          )
+          foreach ($c in $candidates) {
+            Write-Host ("  {0} -> {1}" -f $c, (Test-Path $c))
+          }
+          $native = "$env:ProgramFiles(x86)\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $native)) { throw "ISCC.exe 未找到: $native" }
+          Write-Host "使用原生路径: $native"
+          & $native | Select-Object -First 3
 
       - name: Package (self-contained single-file)
         shell: pwsh

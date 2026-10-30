@@ -1,4 +1,4 @@
-param([int]$dx, [int]$dy)
+﻿param([int]$dx, [int]$dy)
 Add-Type @'
 using System;
 using System.Runtime.InteropServices;

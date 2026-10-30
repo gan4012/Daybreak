@@ -71,21 +71,26 @@ foreach ($f in @("easytier\easytier-core.exe", "easytier\relay.txt")) {
 Write-Host "==> publish-beta 检查通过(主程序 + 联机组件齐全)" -ForegroundColor Green
 
 # ---- 3. 定位 ISCC.exe ----
+# 顺序很重要:先查真实安装目录，最后才用 PATH 里的。
+# 原因:Chocolatey 会在 C:\ProgramData\chocolatey\bin 建一个 ISCC.exe shim，
+# Get-Command 会优先返回这个 shim。shim 是转发器，对 /D 这类参数的处理
+# 和原生 exe 不一致(CI 上就是这样失败的)。
 $iscc = $null
-$cmd = Get-Command "ISCC.exe" -ErrorAction SilentlyContinue
-if ($cmd) {
-    $iscc = $cmd.Source
+$candidates = @(
+    (Join-Path $env:LOCALAPPDATA "Programs\Inno Setup 6\ISCC.exe"),
+    (Join-Path ${env:ProgramFiles(x86)} "Inno Setup 6\ISCC.exe"),
+    (Join-Path $env:ProgramFiles "Inno Setup 6\ISCC.exe"),
+    (Join-Path ${env:ProgramFiles(x86)} "Inno Setup 5\ISCC.exe")
+)
+foreach ($c in $candidates) {
+    if ($c -and (Test-Path $c)) { $iscc = $c; break }
 }
-else {
-    # 常见安装位置
-    $candidates = @(
-        (Join-Path $env:LOCALAPPDATA "Programs\Inno Setup 6\ISCC.exe"),
-        (Join-Path ${env:ProgramFiles(x86)} "Inno Setup 6\ISCC.exe"),
-        (Join-Path $env:ProgramFiles "Inno Setup 6\ISCC.exe"),
-        (Join-Path ${env:ProgramFiles(x86)} "Inno Setup 5\ISCC.exe")
-    )
-    foreach ($c in $candidates) {
-        if ($c -and (Test-Path $c)) { $iscc = $c; break }
+
+# 真实路径都没找到才退回 PATH，并且拒绝 chocolatey 的 shim
+if (-not $iscc) {
+    $cmd = Get-Command "ISCC.exe" -ErrorAction SilentlyContinue
+    if ($cmd -and $cmd.Source -notmatch 'chocolatey\\bin') {
+        $iscc = $cmd.Source
     }
 }
 

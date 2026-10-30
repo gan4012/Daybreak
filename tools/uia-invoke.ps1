@@ -1,4 +1,4 @@
-param([string]$name)
+﻿param([string]$name)
 Add-Type @'
 using System;
 using System.Runtime.InteropServices;
