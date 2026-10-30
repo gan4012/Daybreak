@@ -247,27 +247,26 @@ Write-Host "==> 发行目录已更新: $releaseDir ($relSize MB)" -ForegroundCol
 Write-Host "    可直接双击: $releaseDir\Daybreak.Launcher.exe"
 
 # ---- 顺带生成安装包 ----
-# 两种"没打成"要区别对待:
-#   1. 机器上没装 Inno Setup —— 正常情况，提示一句就好，zip 已经好了，不影响成功
-#      (package-installer.ps1 对这种返回 0)
-#   2. ISCC 真的报错了 —— 必须让整个打包失败，否则 CI 的 Package 步骤变绿、
-#      Release 照发，但产物里根本没有安装包。
+# 安装包是**可选产物**，打不出来不算失败。
+#
+# 设计理由:绿色包 zip 是主产物，安装包是附加物。
+# 历史上因为强制要求安装包，导致 v0.1.4 连续 3 次发版失败
+# (Inno Setup 在 CI runner 上装不上)，连 zip 都发不出去 —— 本末倒置。
+# 现在:有 Inno Setup 就带上安装包，没有就跳过，zip 始终能出。
+#
+# 唯一的例外:ISCC 找到了但编译报错，那是真 bug，必须暴露。
+# 这个由 package-installer.ps1 用非 0 退出码表达，这里照常 throw。
 #
 # 注意几个坑:
 #   · 要用 $PSHOME\powershell.exe 而不是裸 powershell —— 后者走 PATH 解析，
 #     可能被同名的别的东西劫持
 #   · 加 -NoProfile 避免用户 profile 里的输出污染退出码
-#   · 调用前把 $LASTEXITCODE 置空，否则子进程没设它时读到上一次的旧值
+#   · 调用前把 $LASTEXITCODE 置 0，否则子进程没设它时读到上一次的旧值
 $installerScript = Join-Path $PSScriptRoot "package-installer.ps1"
 if (Test-Path $installerScript) {
     Write-Host ""
-    # CI 里必须打出安装包:GitHub Actions 会设置 $env:CI=true。
-    # 本地没装 Inno Setup 只是提示跳过，CI 里则直接失败。
-    $installerExtra = @()
-    if ($env:CI) { $installerExtra += "-RequireInstaller" }
-
     $LASTEXITCODE = 0
-    & (Join-Path $PSHOME "powershell.exe") -NoProfile -ExecutionPolicy Bypass -File $installerScript -SkipBuild @installerExtra
+    & (Join-Path $PSHOME "powershell.exe") -NoProfile -ExecutionPolicy Bypass -File $installerScript -SkipBuild
     $installerExit = $LASTEXITCODE
     if ($installerExit -ne 0) {
         throw "安装包生成失败(退出码 $installerExit)。绿色包 zip 已生成，但安装包没有。"
